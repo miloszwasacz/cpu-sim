@@ -20,9 +20,9 @@ pub fn decode(instr: u32) -> Box<dyn Instr> {
         (0b0, 0b1, 0b0110) => dp_2src::decode(instr),
         (0b1, 0b1, 0b0110) => dp_1src::decode(instr),
         (_, 0b0, op2) if (op2 >> 3) == 0b0 => logic_shift::decode(instr),
-        (_, 0b1, op2) if (op2 & 0b1001) == 0b1000 => add_sub_shift::decode(instr),
+        (_, 0b0, op2) if (op2 & 0b1001) == 0b1000 => add_sub_shift::decode(instr),
         (_, 0b1, op2) if (op2 >> 3) == 0b1 => dp_3src::decode(instr),
-        _ => invalid_instr!(),
+        _ => invalid_instr!(instr),
     }
 }
 
@@ -57,7 +57,7 @@ mod dp_2src {
         let rd = extract_bits!(instr, RD_SHIFT, RD_MASK);
 
         if s != 0 {
-            invalid_instr!()
+            invalid_instr!(instr)
         }
         match opcode {
             0b000010 => Box::new(Udiv::new(rd, rn, rm, sf)),
@@ -70,7 +70,7 @@ mod dp_2src {
             0b011001 => Box::new(Umax::new(rd, rn, rm, sf)),
             0b011010 => Box::new(Smin::new(rd, rn, rm, sf)),
             0b011011 => Box::new(Umin::new(rd, rn, rm, sf)),
-            _ => invalid_instr!(),
+            _ => invalid_instr!(instr),
         }
     }
 }
@@ -106,11 +106,11 @@ mod dp_1src {
         let rd = extract_bits!(instr, RD_SHIFT, RD_MASK);
 
         if s != 0 {
-            invalid_instr!()
+            invalid_instr!(instr)
         }
         match (opcode, opcode2) {
             (0b001000, 0b00000) => Box::new(Abs::new(rd, rn, sf)),
-            _ => invalid_instr!(),
+            _ => invalid_instr!(instr),
         }
     }
 }
@@ -158,7 +158,7 @@ mod logic_shift {
             (0b01, 0b0) => Box::new(Orr::new(rd, rn, rm, sf, shift, imm6)),
             (0b10, 0b0) => Box::new(Eor::new(rd, rn, rm, sf, shift, imm6)),
             (0b11, 0b0) => Box::new(Ands::new(rd, rn, rm, sf, shift, imm6)),
-            _ => invalid_instr!(),
+            _ => invalid_instr!(instr),
         }
     }
 }
@@ -206,7 +206,7 @@ mod add_sub_shift {
             (0b0, 0b1) => Box::new(Adds::new(rd, rn, rm, sf, shift, imm6)),
             (0b1, 0b0) => Box::new(Sub::new(rd, rn, rm, sf, shift, imm6)),
             (0b1, 0b1) => Box::new(Subs::new(rd, rn, rm, sf, shift, imm6)),
-            _ => invalid_instr!(),
+            _ => invalid_instr!(instr),
         }
     }
 }
@@ -252,7 +252,7 @@ mod dp_3src {
         match (op54, op31, o0) {
             (0b00, 0b000, 0b0) => Box::new(Madd::new(rd, rn, rm, ra, sf)),
             (0b00, 0b000, 0b1) => Box::new(Msub::new(rd, rn, rm, ra, sf)),
-            _ => invalid_instr!(),
+            _ => invalid_instr!(instr),
         }
     }
 }

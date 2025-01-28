@@ -2,8 +2,10 @@ pub use self::add_sub::*;
 pub use self::logical::*;
 pub use self::min_max::*;
 pub use self::move_wide::*;
+use crate::instr::DisplayOperands;
 use crate::reg::RegisterId;
 
+use std::fmt::{self, Formatter};
 use std::ops::Shl;
 
 mod add_sub;
@@ -14,6 +16,7 @@ mod move_wide;
 type AllowSP = bool;
 type ImmediateShift = u32;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct DpImmInstr<T> {
     d: RegisterId,
     n: RegisterId,
@@ -39,5 +42,11 @@ impl<T: Shl<u32, Output = T>> DpImmInstr<T> {
         };
 
         DpImmInstr { d, n, imm }
+    }
+}
+
+impl<T: fmt::Display> DisplayOperands for DpImmInstr<T> {
+    fn write_operands(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}, {}, #{}", self.d, self.n, self.imm)
     }
 }

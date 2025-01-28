@@ -1,8 +1,11 @@
-use crate::instr::Instr;
+use crate::instr::{DisplayOperands, Instr, INSTR_PRETTY_WIDTH};
 use crate::pipeline::decode::sign_extend;
+
+use std::fmt;
 
 //#region B.cond
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Bcond {
     cond: Cond,
     offset: i64,
@@ -20,6 +23,22 @@ impl Bcond {
 
 impl Instr for Bcond {}
 
+impl DisplayOperands for Bcond {
+    fn write_operands(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "#{}", self.offset)
+    }
+}
+
+impl fmt::Display for Bcond {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = format!("B.{}", self.cond);
+        let width = if f.alternate() { INSTR_PRETTY_WIDTH } else { 0 };
+        write!(f, "{:<width$} ", name)?;
+        crate::instr::DisplayOperands::write_operands(self, f)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Cond {
     Eq,
     Ne,
@@ -60,6 +79,12 @@ impl From<u32> for Cond {
             0b1111 => Cond::Nv,
             val => panic!("{val} is not a valid condition code"),
         }
+    }
+}
+
+impl fmt::Display for Cond {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#}", format!("{:?}", self).to_ascii_uppercase())
     }
 }
 

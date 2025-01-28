@@ -1,14 +1,17 @@
 use self::addr_mode::AddressingMode;
 use self::data_size::DataSize;
 use self::offset::{ImmOffset, Offset};
+use crate::instr::DisplayOperands;
 use crate::pipeline::decode::sign_extend;
 use crate::reg::{RegisterId, RegisterSize};
 
+use std::fmt;
 use std::marker::PhantomData;
 
 pub mod ldr_str_reg_imm;
 pub mod ldr_str_reg_reg_off;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct LdrStr<T> {
     op: LdrStrOp,
     t: RegisterId,
@@ -17,6 +20,7 @@ struct LdrStr<T> {
     offset: Offset,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum LdrStrOp {
     Ldr,
     Str,
@@ -35,19 +39,13 @@ impl<T: DataSize> LdrStr<T> {
         let datasize = PhantomData::<T>;
 
         let scale = T::SIZE_ENCODED;
-        let wback = addr_mode.wback();
-        let post_index = addr_mode.post_index();
         let offset = match addr_mode {
             AddressingMode::PostIndex | AddressingMode::PreIndex => {
                 ImmOffset::Signed(sign_extend(imm, 9))
             }
             AddressingMode::UnsignedOffset => ImmOffset::Unsigned((imm as u64) << scale),
         };
-        let offset = Offset::Imm {
-            wback,
-            post_index,
-            offset,
-        };
+        let offset = Offset::Imm { addr_mode, offset };
 
         Self {
             op,
@@ -74,7 +72,7 @@ impl<T: DataSize> LdrStr<T> {
         let offset = Offset::Reg {
             m,
             extend_type: option.into(),
-            shift: amount,
+            amount,
         };
 
         Self {
@@ -83,6 +81,46 @@ impl<T: DataSize> LdrStr<T> {
             n,
             datasize,
             offset,
+        }
+    }
+}
+
+impl<T: fmt::Display> DisplayOperands for LdrStr<T> {
+    fn write_operands(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.offset {
+            Offset::Imm { addr_mode, offset } => match addr_mode {
+                AddressingMode::PostIndex => write!(f, "{} [ {} ], #{}", self.t, self.n, offset),
+                AddressingMode::PreIndex => write!(f, "{}, [ {}, #{} ]!", self.t, self.n, offset),
+                AddressingMode::UnsignedOffset => {
+                    write!(f, "{} [ {}, #{} ]", self.t, self.n, offset)
+                }
+            },
+            Offset::Reg {
+                m,
+                extend_type,
+                amount: shift,
+            } => {
+                write!(
+                    f,
+                    "{} [ {}, {}, {} #{} ]",
+                    self.t, self.n, m, extend_type, shift
+                )
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LdrStrSize {
+    Word(LdrStr<u32>),
+    DoubleWord(LdrStr<u64>),
+}
+
+impl DisplayOperands for LdrStrSize {
+    fn write_operands(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LdrStrSize::Word(str) => str.write_operands(f),
+            LdrStrSize::DoubleWord(str) => str.write_operands(f),
         }
     }
 }
@@ -115,6 +153,7 @@ mod data_size {
 }
 
 pub mod addr_mode {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub enum AddressingMode {
         PostIndex,
         PreIndex,
@@ -143,29 +182,45 @@ pub mod addr_mode {
 }
 
 mod offset {
+    use super::addr_mode::AddressingMode;
     use super::extend::ExtendType;
     use crate::reg::RegisterId;
 
+    use std::fmt;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub(super) enum Offset {
         Imm {
-            wback: bool,
-            post_index: bool,
+            addr_mode: AddressingMode,
             offset: ImmOffset,
         },
         Reg {
             m: RegisterId,
             extend_type: ExtendType,
-            shift: u32,
+            amount: u32,
         },
     }
 
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub(super) enum ImmOffset {
         Signed(i64),
         Unsigned(u64),
     }
+
+    impl fmt::Display for ImmOffset {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                ImmOffset::Signed(offset) => write!(f, "{}", offset),
+                ImmOffset::Unsigned(offset) => write!(f, "{}", offset),
+            }
+        }
+    }
 }
 
 mod extend {
+    use std::fmt;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub(super) enum ExtendType {
         Uxtw,
         Lsl,
@@ -182,6 +237,12 @@ mod extend {
                 0b111 => ExtendType::Sxtx,
                 e => panic!("{e} is not a valid extend/shift specifier"),
             }
+        }
+    }
+
+    impl fmt::Display for ExtendType {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{}", format!("{:?}", self).to_ascii_uppercase())
         }
     }
 }

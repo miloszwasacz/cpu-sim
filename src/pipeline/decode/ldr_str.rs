@@ -9,7 +9,7 @@ const OP0_MASK: u32 = 0b1111;
 const OP1_SHIFT: u32 = 26;
 const OP1_MASK: u32 = 0b1;
 
-const OP2_SHIFT: u32 = 25;
+const OP2_SHIFT: u32 = 10;
 const OP2_MASK: u32 = 0b111_1111_1111_1111;
 
 pub fn decode(instr: u32) -> Box<dyn Instr> {
@@ -18,7 +18,7 @@ pub fn decode(instr: u32) -> Box<dyn Instr> {
     let op2 = extract_bits!(instr, OP2_SHIFT, OP2_MASK);
 
     if op0 & 0b11 != 0b11 {
-        invalid_instr!()
+        invalid_instr!(instr)
     }
     match op2 & 0b100_1000_0000_0011 {
         0b000_0000_0000_0001 => ldr_str_reg_imm::decode(instr, AddressingMode::PostIndex),
@@ -27,7 +27,7 @@ pub fn decode(instr: u32) -> Box<dyn Instr> {
         op2 if op2 & 0b100_0000_0000_0000 == 0b100_0000_0000_0000 => {
             ldr_str_reg_imm::decode(instr, AddressingMode::UnsignedOffset)
         }
-        _ => invalid_instr!(),
+        _ => invalid_instr!(instr),
     }
 }
 
@@ -85,7 +85,7 @@ mod ldr_str_reg_imm {
                 Box::new(Ldr::new(rt, rn, imm, size, addr_mode))
             }
             (0b10, 0b0, 0b10) => Box::new(Ldrsw::new(rt, rn, imm, addr_mode)),
-            _ => invalid_instr!(),
+            _ => invalid_instr!(instr),
         }
     }
 }
@@ -142,7 +142,7 @@ mod ldr_str_reg_reg_off {
                 Box::new(Ldr::new(rt, rn, rm, option, s, size))
             }
             (0b10, 0b0, 0b10) => Box::new(Ldrsw::new(rt, rn, rm, option, s)),
-            _ => invalid_instr!(),
+            _ => invalid_instr!(instr),
         }
     }
 }

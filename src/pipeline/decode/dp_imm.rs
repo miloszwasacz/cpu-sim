@@ -99,14 +99,14 @@ mod min_max {
         let rd = extract_bits!(instr, RD_SHIFT, RD_MASK);
 
         if op != 0 || s != 0 {
-            invalid_instr!()
+            invalid_instr!(instr)
         }
         match opc {
             0b0000 => Box::new(Smax::new(rd, rn, sf, imm8)),
             0b0001 => Box::new(Umax::new(rd, rn, sf, imm8)),
             0b0010 => Box::new(Smin::new(rd, rn, sf, imm8)),
             0b0011 => Box::new(Umin::new(rd, rn, sf, imm8)),
-            _ => invalid_instr!(),
+            _ => invalid_instr!(instr),
         }
     }
 }
@@ -146,14 +146,14 @@ mod logical {
         let rd = extract_bits!(instr, RD_SHIFT, RD_MASK);
 
         if sf == 0 && n != 0 {
-            invalid_instr!()
+            invalid_instr!(instr)
         }
         match opc {
             0b00 => Box::new(And::new(rd, rn, sf, n, immr, imms)),
             0b01 => Box::new(Orr::new(rd, rn, sf, n, immr, imms)),
             0b10 => Box::new(Eor::new(rd, rn, sf, n, immr, imms)),
             0b11 => Box::new(Ands::new(rd, rn, sf, n, immr, imms)),
-            _ => invalid_instr!(),
+            _ => invalid_instr!(instr),
         }
     }
 }
@@ -185,13 +185,13 @@ mod move_wide {
         let rd = extract_bits!(instr, RD_SHIFT, RD_MASK);
 
         if sf == 0 && (hw & 0b10) != 0b00 {
-            invalid_instr!()
+            invalid_instr!(instr)
         }
         match opc {
             // 0b00 => Box::new(Movn::new(rd, sf, imm16, hw)),
             0b10 => Box::new(Movz::new(rd, sf, imm16, hw)),
             // 0b11 => Box::new(Movk::new(rd, sf, imm16, hw)),
-            _ => invalid_instr!(),
+            _ => invalid_instr!(instr),
         }
     }
 }

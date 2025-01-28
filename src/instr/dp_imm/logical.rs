@@ -1,5 +1,5 @@
 use super::DpImmInstr;
-use crate::instr::Instr;
+use crate::instr::{impl_display, Instr};
 use crate::pipeline::decode::{ones, replicate, ror};
 
 const BITS6: u32 = 0b111111;
@@ -25,6 +25,7 @@ fn make_imm(n: u32, imms: u32, immr: u32, m: u32) -> u64 {
 
 macro_rules! logical_instr {
     ($name:ident, $d_allow_sp:expr) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub struct $name(DpImmInstr<u64>);
 
         impl $name {
@@ -41,6 +42,8 @@ macro_rules! logical_instr {
         }
 
         impl Instr for $name {}
+
+        impl_display!($name, |self| &self.0);
     };
     ($name:ident) => {
         logical_instr!($name, true);

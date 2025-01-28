@@ -6,8 +6,8 @@ mod dp_reg;
 mod ldr_str;
 
 macro_rules! invalid_instr {
-    () => {
-        panic!("invalid or unsupported instruction")
+    ($instr:expr) => {
+        panic!("{:#034b} is an invalid or unsupported instruction", $instr)
     };
 }
 use invalid_instr;
@@ -31,7 +31,7 @@ macro_rules! decode {
             let group = extract_bits!($instr, $shift, $mask);
             match group {
                 $( $pat => $module ::decode($instr), )*
-                _ => invalid_instr!(),
+                _ => invalid_instr!($instr),
             }
         }};
     }

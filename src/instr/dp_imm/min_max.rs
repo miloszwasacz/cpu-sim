@@ -1,5 +1,5 @@
 use super::{DpImmInstr, ImmediateShift};
-use crate::instr::Instr;
+use crate::instr::{impl_display, Instr};
 
 const fn make_simm(imm8: u32) -> (i8, ImmediateShift) {
     let imm8 = imm8 as i32;
@@ -12,6 +12,7 @@ const fn make_uimm(imm8: u32) -> (u8, ImmediateShift) {
 
 macro_rules! min_max_instr {
     ($name:ident, $ty:ty, $sign:path) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub struct $name(DpImmInstr<$ty>);
 
         impl $name {
@@ -19,8 +20,10 @@ macro_rules! min_max_instr {
                 Self(DpImmInstr::new((d, false), (n, false), sf, 0, $sign(imm8)))
             }
         }
-        
+
         impl Instr for $name {}
+
+        impl_display!($name, |self| &self.0);
     };
     ($name:ident::<S>) => {
         min_max_instr!($name, i8, make_simm);

@@ -1,6 +1,9 @@
-use crate::instr::Instr;
+use crate::instr::{impl_display, DisplayOperands, Instr};
 use crate::reg::RegisterId;
 
+use std::fmt;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Dp2SrcInstr {
     d: RegisterId,
     n: RegisterId,
@@ -18,8 +21,15 @@ impl Dp2SrcInstr {
     }
 }
 
+impl DisplayOperands for Dp2SrcInstr {
+    fn write_operands(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}, {}, {}", self.d, self.n, self.m)
+    }
+}
+
 macro_rules! dp_2src_instr {
     ($name:ident) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub struct $name(Dp2SrcInstr);
 
         impl $name {
@@ -29,6 +39,8 @@ macro_rules! dp_2src_instr {
         }
 
         impl Instr for $name {}
+        
+        impl_display!($name, |self| &self.0);
     };
 }
 

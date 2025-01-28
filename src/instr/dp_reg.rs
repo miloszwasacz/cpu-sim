@@ -3,7 +3,10 @@ pub use self::dp_1src::*;
 pub use self::dp_2src::*;
 pub use self::dp_3src::*;
 pub use self::logic_shift::*;
+use crate::instr::DisplayOperands;
 use crate::reg::RegisterId;
+
+use std::fmt;
 
 mod add_sub_shift;
 mod dp_1src;
@@ -11,6 +14,7 @@ mod dp_2src;
 mod dp_3src;
 mod logic_shift;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ShiftedRegInstr {
     d: RegisterId,
     n: RegisterId,
@@ -43,6 +47,17 @@ impl ShiftedRegInstr {
     }
 }
 
+impl DisplayOperands for ShiftedRegInstr {
+    fn write_operands(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}, {}, {}, {} #{}",
+            self.d, self.n, self.m, self.shift, self.amount
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Shift {
     Lsl,
     Lsr,
@@ -59,5 +74,11 @@ impl From<u32> for Shift {
             0b11 => Shift::Ror,
             val => panic!("{val} is not a valid shift code"),
         }
+    }
+}
+
+impl fmt::Display for Shift {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", format!("{:?}", self).to_ascii_uppercase())
     }
 }

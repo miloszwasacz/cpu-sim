@@ -1,5 +1,5 @@
-use crate::instr::ldr_str::{LdrStr, LdrStrOp};
-use crate::instr::Instr;
+use super::{LdrStr, LdrStrOp, LdrStrSize};
+use crate::instr::{impl_display, Instr};
 use crate::reg::RegisterSize;
 
 fn reg_size_from_option(option: u32) -> RegisterSize {
@@ -19,6 +19,7 @@ fn byte_m_size(option: u32) -> RegisterSize {
 
 //#region LDRB (register)
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ldrb(LdrStr<u8>);
 
 impl Ldrb {
@@ -37,10 +38,13 @@ impl Ldrb {
 
 impl Instr for Ldrb {}
 
+impl_display!(Ldrb, |self| &self.0);
+
 //#endregion
 
 //#region LDRSB (register)
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ldrsb(LdrStr<i8>);
 
 impl Ldrsb {
@@ -64,26 +68,39 @@ impl Ldrsb {
 
 impl Instr for Ldrsb {}
 
+impl_display!(Ldrsb, |self| &self.0);
+
 //#endregion
 
 //#region LDRH (register)
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ldrh(LdrStr<u16>);
 
 impl Ldrh {
     pub fn new(t: u32, n: u32, m: u32, option: u32, s: u32) -> Self {
-        let m_size = reg_size_from_option(option); 
+        let m_size = reg_size_from_option(option);
         let shift = if s == 1 { 1 } else { 0 };
-        Self(LdrStr::new_reg(LdrStrOp::Ldr, (t, RegisterSize::W), n, (m, m_size), option, shift))
+        Self(LdrStr::new_reg(
+            LdrStrOp::Ldr,
+            (t, RegisterSize::W),
+            n,
+            (m, m_size),
+            option,
+            shift,
+        ))
     }
 }
 
 impl Instr for Ldrh {}
 
+impl_display!(Ldrh, |self| &self.0);
+
 //#endregion
 
 //#region LDRSH (register)
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ldrsh(LdrStr<i16>);
 
 impl Ldrsh {
@@ -108,16 +125,14 @@ impl Ldrsh {
 
 impl Instr for Ldrsh {}
 
+impl_display!(Ldrsh, |self| &self.0);
+
 //#endregion
 
 //#region LDR (register)
 
-pub struct Ldr(LdrSize);
-
-enum LdrSize {
-    Word(LdrStr<u32>),
-    DoubleWord(LdrStr<u64>),
-}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Ldr(LdrStrSize);
 
 impl Ldr {
     pub fn new(t: u32, n: u32, m: u32, option: u32, s: u32, size: u32) -> Self {
@@ -125,7 +140,7 @@ impl Ldr {
         let scale = size;
         let shift = if s == 1 { scale } else { 0 };
         Self(match size {
-            0b10 => LdrSize::Word(LdrStr::new_reg(
+            0b10 => LdrStrSize::Word(LdrStr::new_reg(
                 LdrStrOp::Ldr,
                 (t, RegisterSize::W),
                 n,
@@ -133,7 +148,7 @@ impl Ldr {
                 option,
                 shift,
             )),
-            0b11 => LdrSize::DoubleWord(LdrStr::new_reg(
+            0b11 => LdrStrSize::DoubleWord(LdrStr::new_reg(
                 LdrStrOp::Ldr,
                 (t, RegisterSize::X),
                 n,
@@ -148,10 +163,13 @@ impl Ldr {
 
 impl Instr for Ldr {}
 
+impl_display!(Ldr, |self| &self.0);
+
 //#endregion
 
 //#region LDRSW (register)
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ldrsw(LdrStr<i32>);
 
 impl Ldrsw {
@@ -171,10 +189,13 @@ impl Ldrsw {
 
 impl Instr for Ldrsw {}
 
+impl_display!(Ldrsw, |self| &self.0);
+
 //#endregion
 
 //#region STRB (register)
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Strb(LdrStr<u8>);
 
 impl Strb {
@@ -193,10 +214,13 @@ impl Strb {
 
 impl Instr for Strb {}
 
+impl_display!(Strb, |self| &self.0);
+
 //#endregion
 
 //#region STRH (register)
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Strh(LdrStr<u16>);
 
 impl Strh {
@@ -216,16 +240,14 @@ impl Strh {
 
 impl Instr for Strh {}
 
+impl_display!(Strh, |self| &self.0);
+
 //#endregion
 
 //#region STR (register)
 
-pub struct Str(StrSize);
-
-enum StrSize {
-    Word(LdrStr<u32>),
-    DoubleWord(LdrStr<u64>),
-}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Str(LdrStrSize);
 
 impl Str {
     pub fn new(t: u32, n: u32, m: u32, option: u32, s: u32, size: u32) -> Self {
@@ -233,7 +255,7 @@ impl Str {
         let scale = size;
         let shift = if s == 1 { scale } else { 0 };
         Self(match size {
-            0b10 => StrSize::Word(LdrStr::new_reg(
+            0b10 => LdrStrSize::Word(LdrStr::new_reg(
                 LdrStrOp::Str,
                 (t, RegisterSize::W),
                 n,
@@ -241,7 +263,7 @@ impl Str {
                 option,
                 shift,
             )),
-            0b11 => StrSize::DoubleWord(LdrStr::new_reg(
+            0b11 => LdrStrSize::DoubleWord(LdrStr::new_reg(
                 LdrStrOp::Str,
                 (t, RegisterSize::X),
                 n,
@@ -255,5 +277,7 @@ impl Str {
 }
 
 impl Instr for Str {}
+
+impl_display!(Str, |self| &self.0);
 
 //#endregion

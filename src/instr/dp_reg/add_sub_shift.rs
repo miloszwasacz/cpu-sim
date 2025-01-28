@@ -1,8 +1,9 @@
 use super::ShiftedRegInstr;
-use crate::instr::Instr;
+use crate::instr::{impl_display, Instr};
 
 macro_rules! add_sub_instr {
     ($name:ident) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub struct $name(ShiftedRegInstr);
 
         impl $name {
@@ -13,6 +14,8 @@ macro_rules! add_sub_instr {
         }
 
         impl Instr for $name {}
+        
+        impl_display!($name, |self| &self.0);
     };
 }
 

@@ -1,8 +1,9 @@
 use super::DpImmInstr;
-use crate::instr::Instr;
+use crate::instr::{Instr, impl_display};
 
 macro_rules! add_sub_instr {
     ($name:ident, $d_allow_sp:expr) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub struct $name(DpImmInstr<u32>);
 
         impl $name {
@@ -18,6 +19,8 @@ macro_rules! add_sub_instr {
         }
 
         impl Instr for $name {}
+
+        impl_display!($name, |self| &self.0);
     };
 }
 

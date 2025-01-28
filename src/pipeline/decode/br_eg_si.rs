@@ -21,7 +21,7 @@ pub fn decode(instr: u32) -> Box<dyn Instr> {
         (0b110, 0b01_0000_0011_0010) if op2 == 0b11111 => hints::decode(instr),
         (0b110, op1) if (op1 >> 13) == 0b1 => uncond_br_reg::decode(instr),
         (0b000, _) | (0b100, _) => uncond_br_imm::decode(instr),
-        _ => invalid_instr!(),
+        _ => invalid_instr!(instr),
     }
 }
 
@@ -45,7 +45,7 @@ mod cond_br_imm {
 
         match o0 {
             0b0 => Box::new(Bcond::new(cond, imm19)),
-            _ => invalid_instr!(),
+            _ => invalid_instr!(instr),
         }
     }
 }
@@ -66,7 +66,7 @@ mod hints {
 
         match (crm, op2) {
             (0b0000, 0b000) => Box::new(Nop::new()),
-            _ => invalid_instr!(),
+            _ => invalid_instr!(instr),
         }
     }
 }
@@ -100,7 +100,7 @@ mod uncond_br_reg {
         match (opc, op2, op3, rn, op4) {
             (0b0000, 0b11111, 0b000000, _, 0b00000) => Box::new(Br::new(rn)),
             (0b0010, 0b11111, 0b000000, _, 0b00000) => Box::new(Ret::new(rn)),
-            _ => invalid_instr!(),
+            _ => invalid_instr!(instr),
         }
     }
 }
@@ -122,7 +122,7 @@ mod uncond_br_imm {
         match op {
             0b0 => Box::new(B::new(imm26)),
             // 0b1 => Box::new(Bl::new(imm26)),
-            _ => invalid_instr!(),
+            _ => invalid_instr!(instr),
         }
     }
 }
