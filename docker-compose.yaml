@@ -1,0 +1,9 @@
+name: arm-v8
+
+services:
+  emulator:
+    build: ./
+    platform: linux/arm64/v8
+    command: /bin/sh
+    volumes:
+      - ./test:/app
