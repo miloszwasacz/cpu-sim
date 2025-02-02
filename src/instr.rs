@@ -1,60 +1,46 @@
+use crate::include_generated;
+use crate::pipeline::decode::*;
+
 use std::any::Any;
 use std::fmt;
 
-pub mod br_eg_si;
-pub mod dp_imm;
-pub mod dp_reg;
-pub mod ldr_str;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct RawInstr(u32);
-
-impl RawInstr {
-    pub fn new(bytes: &[u8]) -> RawInstr {
-        let bytes = bytes
-            .try_into()
-            .expect("instructions should be 4 bytes long");
-        let instr = u32::from_le_bytes(bytes);
-        Self(instr)
-    }
-
-    pub fn encoded(&self) -> u32 {
-        self.0
-    }
-}
-
-pub trait Instr: Any + fmt::Debug + fmt::Display {}
-
-macro_rules! const_to_upper {
-    ($tokens:tt) => {
-        const_format::map_ascii_case!(const_format::Case::Upper, stringify!($tokens))
+macro_rules! instr_mod {
+    ($name:ident) => {
+        mod $name;
+        pub use self::$name::*;
     };
 }
-use const_to_upper;
+use instr_mod;
 
-const INSTR_PRETTY_WIDTH: usize = 10;
+instr_mod!(ctrl_trans);
+instr_mod!(env_call);
+instr_mod!(int_comput);
+instr_mod!(ld_str);
+instr_mod!(mem_ord);
+pub mod raw;
 
-macro_rules! impl_display {
-    ($instr:ty) => {
-        impl std::fmt::Display for $instr {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                let width = if f.alternate() { crate::instr::INSTR_PRETTY_WIDTH } else { 0 };
-                write!(f, "{:<width$}", crate::instr::const_to_upper!($instr))
-            }
-        }
-    };
-    ($instr:ty, |$self:ident| $operand_src:expr) => {
-        impl std::fmt::Display for $instr {
-            fn fmt(&$self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                let width = if f.alternate() { crate::instr::INSTR_PRETTY_WIDTH } else { 0 };
-                write!(f, "{:<width$} ", crate::instr::const_to_upper!($instr))?;
-                crate::instr::DisplayOperands::write_operands($operand_src, f)
-            }
+pub trait Instr: Any + fmt::Debug + fmt::Display + Decode {}
+
+pub type Addr = usize;
+pub type Immediate = i32;
+
+include_generated!("from_format_impls.rs");
+
+//#region Display
+
+const DISPLAY_PRETTY_WIDTH: usize = 9;
+
+macro_rules! display_width {
+    ($formatter:expr) => {
+        if $formatter.alternate() {
+            crate::instr::DISPLAY_PRETTY_WIDTH
+        } else {
+            0
         }
     };
 }
-use impl_display;
+use display_width;
 
-trait DisplayOperands {
-    fn write_operands(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
-}
+include_generated!("display_impls.rs");
+
+//#endregion

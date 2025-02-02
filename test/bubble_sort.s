@@ -1,77 +1,102 @@
+.LC0:
+        .word   1
+        .word   2
+        .word   3
+        .word   4
 main:
-        sub     sp, sp, #64
-        str     wzr, [sp, #60]
-        mov     w8, #3
-        str     w8, [sp, #20]
-        mov     w8, #2
-        str     w8, [sp, #24]
-        mov     w8, #4
-        str     w8, [sp, #28]
-        mov     w8, #1
-        str     w8, [sp, #32]
-        mov     w8, #9
-        str     w8, [sp, #36]
-        mov     w8, #7
-        str     w8, [sp, #40]
-        mov     w8, #8
-        str     w8, [sp, #44]
-        mov     w8, #10
-        str     w8, [sp, #48]
-        mov     w9, #5
-        str     w9, [sp, #52]
-        mov     w9, #6
-        str     w9, [sp, #56]
-        str     w8, [sp, #16]
-        b       .LBB0_1
-.LBB0_1:
-        ldr     w8, [sp, #16]
-        subs    w8, w8, #1
-        b.le    .LBB0_9
-        b       .LBB0_2
-.LBB0_2:
-        str     wzr, [sp, #12]
-        b       .LBB0_3
-.LBB0_3:
-        ldr     w8, [sp, #12]
-        ldr     w9, [sp, #16]
-        subs    w8, w8, w9
-        b.ge    .LBB0_8
-        b       .LBB0_4
-.LBB0_4:
-        ldrsw   x8, [sp, #12]
-        add     x9, sp, #20
-        ldr     w8, [x9, x8, lsl #2]
-        ldr     w10, [sp, #12]
-        add     w10, w10, #1
-        ldr     w9, [x9, w10, sxtw #2]
-        subs    w8, w8, w9
-        b.le    .LBB0_6
-        b       .LBB0_5
-.LBB0_5:
-        ldrsw   x8, [sp, #12]
-        add     x9, sp, #20
-        ldr     w8, [x9, x8, lsl #2]
-        str     w8, [sp, #8]
-        ldr     w8, [sp, #12]
-        add     w8, w8, #1
-        ldr     w8, [x9, w8, sxtw #2]
-        ldrsw   x10, [sp, #12]
-        str     w8, [x9, x10, lsl #2]
-        ldr     w8, [sp, #8]
-        ldr     w10, [sp, #12]
-        add     w10, w10, #1
-        str     w8, [x9, w10, sxtw #2]
-        b       .LBB0_6
-.LBB0_6:
-        b       .LBB0_7
-.LBB0_7:
-        ldr     w8, [sp, #12]
-        add     w8, w8, #1
-        str     w8, [sp, #12]
-        b       .LBB0_3
-.LBB0_8:
-        b       .LBB0_1
-.LBB0_9:
-        ldr     w0, [sp, #60]
-        add     sp, sp, #64
-        ret
+        addi    sp,sp,-96
+        sw      ra,92(sp)
+        sw      s0,88(sp)
+        addi    s0,sp,96
+        li      a5,3
+        sw      a5,-68(s0)
+        li      a5,2
+        sw      a5,-64(s0)
+        li      a5,4
+        sw      a5,-60(s0)
+        li      a5,1
+        sw      a5,-56(s0)
+        li      a5,9
+        sw      a5,-52(s0)
+        li      a5,7
+        sw      a5,-48(s0)
+        li      a5,8
+        sw      a5,-44(s0)
+        li      a5,10
+        sw      a5,-40(s0)
+        li      a5,5
+        sw      a5,-36(s0)
+        li      a5,6
+        sw      a5,-32(s0)
+        lui     a5,%hi(.LC0)
+        addi    a5,a5,%lo(.LC0)
+        lw      a2,0(a5)
+        lw      a3,4(a5)
+        lw      a4,8(a5)
+        lw      a5,12(a5)
+        sw      a2,-84(s0)
+        sw      a3,-80(s0)
+        sw      a4,-76(s0)
+        sw      a5,-72(s0)
+        li      a5,10
+        sw      a5,-24(s0)
+        j       .L2
+.L6:
+        sw      zero,-20(s0)
+        j       .L3
+.L5:
+        lw      a4,-20(s0)
+        addi    a5,s0,-68
+        slli    a4,a4,2
+        add     a5,a4,a5
+        lw      a4,0(a5)
+        lw      a5,-20(s0)
+        addi    a3,a5,1
+        addi    a5,s0,-68
+        slli    a3,a3,2
+        add     a5,a3,a5
+        lw      a5,0(a5)
+        ble     a4,a5,.L4
+        lw      a4,-20(s0)
+        addi    a5,s0,-68
+        slli    a4,a4,2
+        add     a5,a4,a5
+        lw      a5,0(a5)
+        sw      a5,-28(s0)
+        lw      a5,-20(s0)
+        addi    a4,a5,1
+        addi    a5,s0,-68
+        slli    a4,a4,2
+        add     a5,a4,a5
+        lw      a4,0(a5)
+        lw      a3,-20(s0)
+        addi    a5,s0,-68
+        slli    a3,a3,2
+        add     a5,a3,a5
+        sw      a4,0(a5)
+        lw      a5,-20(s0)
+        addi    a4,a5,1
+        addi    a5,s0,-68
+        slli    a4,a4,2
+        add     a5,a4,a5
+        lw      a4,-28(s0)
+        sw      a4,0(a5)
+.L4:
+        lw      a5,-20(s0)
+        addi    a5,a5,1
+        sw      a5,-20(s0)
+.L3:
+        lw      a5,-24(s0)
+        addi    a5,a5,-1
+        lw      a4,-20(s0)
+        blt     a4,a5,.L5
+.L2:
+        lw      a4,-24(s0)
+        li      a5,1
+        bgt     a4,a5,.L6
+        li      a5,0
+        mv      a0,a5
+        lw      ra,92(sp)
+        lw      s0,88(sp)
+        addi    sp,sp,96
+        jr      ra

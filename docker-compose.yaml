@@ -1,9 +1,9 @@
-name: arm-v8
+name: riscv64
 
 services:
   emulator:
     build: ./
-    platform: linux/arm64/v8
+    platform: linux/riscv64
     command: /bin/sh
     volumes:
       - ./test:/app

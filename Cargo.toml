@@ -5,3 +5,7 @@ edition = "2021"
 
 [dependencies]
 const_format = "0.2.34"
+
+[build-dependencies]
+convert_case = "0.7.1"
+itertools = "0.14.0"
