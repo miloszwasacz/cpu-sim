@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 const_format = "0.2.34"
+elf = "0.7.4"
 
 [build-dependencies]
 convert_case = "0.7.1"

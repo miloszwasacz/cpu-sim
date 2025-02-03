@@ -1,9 +1,9 @@
 // #include<stdio.h>
 
-// int test(int a, char b) {
-//     int c = a + b;
-//     return c;
-// }
+int test(int a, char b) {
+    int c = a + b;
+    return c;
+}
 
 int main() {
     int arr[10];
@@ -20,7 +20,7 @@ int main() {
 
     int brr[4] = {1,2,3,4};
     
-    // int d = test(2, 3);
+    int d = test(2, 3);
     int n = 10;
     while (n > 1)
     {
@@ -35,5 +35,4 @@ int main() {
         }
     }
     // printf("%d", arr[0]);
-    // std::cout << arr[0] << "\n";
 }

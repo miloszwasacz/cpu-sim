@@ -1,9 +1,8 @@
-name: riscv64
+name: build-machine
 
 services:
-  emulator:
+  riscv-toolchain:
     build: ./
-    platform: linux/riscv64
-    command: /bin/sh
+    command: /bin/bash
     volumes:
       - ./test:/app

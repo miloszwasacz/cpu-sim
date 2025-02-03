@@ -1,17 +1,9 @@
-FROM riscv64/alpine:latest
+FROM runtimeverificationinc/riscv-gnu-toolchain:ubuntu-jammy-2024.04.12
 
 VOLUME ["/app"]
 
-# Install basic packages
-RUN apk update && apk add --no-cache \
-    build-base \
-    binutils \
-    curl \
-    git \
-    nano \
-    gcc \
-    && rm -rf /var/cache/apk/* 
+RUN apt-get update && apt-get install -y nano
 
 WORKDIR /app
 
-CMD ["/bin/sh"]
+CMD ["/bin/bash"]
