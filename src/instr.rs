@@ -21,7 +21,6 @@ pub mod raw;
 
 pub trait Instr: Any + fmt::Debug + fmt::Display + Decode {}
 
-pub type Addr = usize;
 pub type Immediate = i32;
 
 include_generated!("from_format_impls.rs");

@@ -1,4 +1,3 @@
-pub use self::data_size::DataSize;
 use crate::instr::Immediate;
 use crate::pipeline::decode::{ITypeFormat, STypeFormat};
 use crate::reg::RegisterName;
@@ -32,7 +31,7 @@ impl<T> Load<T> {
     }
 }
 
-impl<T: DataSize> From<ITypeFormat> for Load<T> {
+impl<T> From<ITypeFormat> for Load<T> {
     fn from(value: ITypeFormat) -> Self {
         Self(value, PhantomData)
     }
@@ -54,7 +53,7 @@ macro_rules! load_instr {
         pub struct $name(pub(in crate::instr) crate::instr::ld_str::Load<$size>);
 
         impl crate::instr::Instr for $name {}
-        
+
         impl From<crate::pipeline::decode::ITypeFormat> for $name {
             fn from(value: crate::pipeline::decode::ITypeFormat) -> Self {
                 Self(value.into())
@@ -81,7 +80,7 @@ impl<T> Store<T> {
     }
 }
 
-impl<T: DataSize> From<STypeFormat> for Store<T> {
+impl<T> From<STypeFormat> for Store<T> {
     fn from(value: STypeFormat) -> Self {
         Self(value, PhantomData)
     }
@@ -112,50 +111,3 @@ macro_rules! store_instr {
     };
 }
 use store_instr;
-
-mod data_size {
-    use crate::reg::RegSize;
-
-    pub trait DataSize {
-        /// The size of the type, in bits.
-        const BITS: u32;
-
-        /// The size of the type, in bytes.
-        const BYTES: u32;
-
-        /// The `size` field encoding of the type.
-        const SIZE_ENCODED: u32;
-
-        /// Extends the data to the register size.
-        fn extend(self) -> RegSize;
-
-        /// Creates a `DataSize` value from its representation as a byte array in little endian.
-        ///
-        /// # Panics
-        ///
-        /// Panics if the slice is not [`Self::BYTES`] in length.
-        fn from_le_bytes(bytes: &[u8]) -> Self;
-    }
-
-    macro_rules! impl_data_size {
-        ($( $ty:tt )+) => {
-            $(
-            impl DataSize for $ty {
-                const BITS: u32 = $ty::BITS;
-                const BYTES: u32 = Self::BITS / 8;
-                const SIZE_ENCODED: u32 = Self::BYTES.ilog2();
-
-                fn extend(self) -> RegSize {
-                    self as RegSize
-                }
-
-                fn from_le_bytes(bytes: &[u8]) -> $ty {
-                    $ty::from_le_bytes(bytes.try_into().expect("the byte slice should have the correct length"))
-                }
-            }
-            )+
-        };
-    }
-
-    impl_data_size!(u8 u16 u32 u64 i8 i16 i32 i64);
-}

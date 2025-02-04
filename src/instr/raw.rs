@@ -1,4 +1,4 @@
-use super::Addr;
+use crate::components::memory::Address;
 
 use const_format::formatcp;
 use std::fmt;
@@ -6,20 +6,23 @@ use std::ops::{BitAnd, BitOr, Not, Shl, Shr};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RawInstr {
-    bits: u32,
-    addr: Addr,
+    bits: RawInstrBits,
+    addr: Address,
 }
 
+pub type RawInstrBits = u32;
+
 impl RawInstr {
-    pub fn new(bytes: &[u8], addr: Addr) -> RawInstr {
-        let bytes = bytes
-            .try_into()
-            .expect("instructions should be 4 bytes long");
-        let bits = u32::from_le_bytes(bytes);
+    pub fn new(bits: RawInstrBits, addr: Address) -> RawInstr {
         Self { bits, addr }
     }
 
-    pub fn encoding(&self) -> u32 {
+    pub fn from_bytes(bytes: [u8; size_of::<RawInstrBits>()], addr: Address) -> RawInstr {
+        let bits = RawInstrBits::from_le_bytes(bytes);
+        Self { bits, addr }
+    }
+
+    pub fn encoding(&self) -> RawInstrBits {
         self.bits
     }
 
