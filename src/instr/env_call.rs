@@ -8,7 +8,7 @@ macro_rules! system_instr {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub struct $name;
         
-        impl crate::pipeline::decode::Decode for $name {
+        impl crate::instr::decode::Decode for $name {
             fn decode(_: crate::instr::raw::RawInstr) -> Self
             where
                 Self: Sized,

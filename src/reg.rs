@@ -1,5 +1,5 @@
 use crate::instr::raw::Bits;
-use crate::pipeline::decode::REG_LEN;
+use crate::instr::decode::REG_LEN;
 
 use std::fmt;
 

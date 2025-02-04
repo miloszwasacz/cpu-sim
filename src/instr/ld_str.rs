@@ -1,5 +1,5 @@
 use crate::instr::Immediate;
-use crate::pipeline::decode::{ITypeFormat, STypeFormat};
+use super::decode::{ITypeFormat, STypeFormat};
 use crate::reg::RegisterName;
 
 use std::fmt;
@@ -54,8 +54,8 @@ macro_rules! load_instr {
 
         impl crate::instr::Instr for $name {}
 
-        impl From<crate::pipeline::decode::ITypeFormat> for $name {
-            fn from(value: crate::pipeline::decode::ITypeFormat) -> Self {
+        impl From<crate::instr::decode::ITypeFormat> for $name {
+            fn from(value: crate::instr::decode::ITypeFormat) -> Self {
                 Self(value.into())
             }
         }
@@ -103,8 +103,8 @@ macro_rules! store_instr {
 
         impl crate::instr::Instr for $name {}
 
-        impl From<crate::pipeline::decode::STypeFormat> for $name {
-            fn from(value: crate::pipeline::decode::STypeFormat) -> Self {
+        impl From<crate::instr::decode::STypeFormat> for $name {
+            fn from(value: crate::instr::decode::STypeFormat) -> Self {
                 Self(value.into())
             }
         }

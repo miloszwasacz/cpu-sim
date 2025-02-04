@@ -28,7 +28,7 @@ instr_mod!(xor);
 macro_rules! int_reg_imm_instr {
     ($name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub struct $name(pub(in crate::instr) crate::pipeline::decode::ITypeFormat);
+        pub struct $name(pub(in crate::instr) crate::instr::decode::ITypeFormat);
 
         impl $name {
             pub fn dest(&self) -> crate::reg::RegisterName {
@@ -52,7 +52,7 @@ use int_reg_imm_instr;
 macro_rules! int_upper_imm_instr {
     ($name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub struct $name(pub(in crate::instr) crate::pipeline::decode::UTypeFormat);
+        pub struct $name(pub(in crate::instr) crate::instr::decode::UTypeFormat);
 
         impl $name {
             pub fn dest(&self) -> crate::reg::RegisterName {
@@ -72,7 +72,7 @@ use int_upper_imm_instr;
 macro_rules! int_reg_reg_op {
     ($name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub struct $name(pub(in crate::instr) crate::pipeline::decode::RTypeFormat);
+        pub struct $name(pub(in crate::instr) crate::instr::decode::RTypeFormat);
 
         impl $name {
             pub fn dest(&self) -> crate::reg::RegisterName {

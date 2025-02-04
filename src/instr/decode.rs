@@ -5,7 +5,7 @@ pub use self::r_type::RTypeFormat;
 pub use self::s_type::STypeFormat;
 pub use self::u_type::UTypeFormat;
 
-use self::generated::*;
+pub(crate) use self::generated::decode;
 pub(crate) use self::shared::REG_LEN;
 use crate::instr::raw::RawInstr;
 use crate::instr::Instr;
@@ -16,14 +16,6 @@ mod j_type;
 mod r_type;
 mod s_type;
 mod u_type;
-
-pub struct DecodeStage;
-
-impl DecodeStage {
-    pub fn decode(&self, instr: RawInstr) -> Box<dyn Instr> {
-        decode(instr)
-    }
-}
 
 pub trait Decode {
     fn decode(instr: RawInstr) -> Self

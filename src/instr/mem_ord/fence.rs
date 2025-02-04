@@ -1,5 +1,5 @@
+use crate::instr::decode::ITypeFormat;
 use crate::instr::{display_width, Immediate, Instr};
-use crate::pipeline::decode::ITypeFormat;
 use crate::reg::RegisterName;
 use std::fmt;
 

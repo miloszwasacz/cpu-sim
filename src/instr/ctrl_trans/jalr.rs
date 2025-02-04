@@ -1,11 +1,11 @@
+use crate::instr::decode::ITypeFormat;
 use crate::instr::{display_width, Immediate, Instr};
-use crate::pipeline::decode::ITypeFormat;
 use crate::reg::RegisterName;
 
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Jalr(pub(crate) ITypeFormat);
+pub struct Jalr(pub(in crate::instr) ITypeFormat);
 
 impl Jalr {
     const JR_DISPLAY_NAME: &'static str = "jr";

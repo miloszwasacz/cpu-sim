@@ -3,7 +3,6 @@ use std::any::Any;
 pub mod components;
 pub mod instr;
 pub mod os;
-pub mod pipeline;
 pub mod reg;
 
 macro_rules! include_generated {

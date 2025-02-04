@@ -11,19 +11,19 @@ instr_mod!(bne);
 macro_rules! cond_branch {
     ($name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub struct $name(pub(in crate::instr) crate::pipeline::decode::BTypeFormat);
+        pub struct $name(pub(in crate::instr) crate::instr::decode::BTypeFormat);
 
         impl $name {
             pub fn src1(&self) -> crate::reg::RegisterName {
-                self.0 .0.rs1
+                self.0.0.rs1
             }
 
             pub fn src2(&self) -> crate::reg::RegisterName {
-                self.0 .0.rs2
+                self.0.0.rs2
             }
 
             pub fn offset(&self) -> crate::instr::Immediate {
-                self.0 .0.imm
+                self.0.0.imm
             }
         }
 

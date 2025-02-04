@@ -1,5 +1,5 @@
 use crate::include_generated;
-use crate::pipeline::decode::*;
+use self::decode::*;
 
 use std::any::Any;
 use std::fmt;
@@ -17,7 +17,9 @@ instr_mod!(env_call);
 instr_mod!(int_comput);
 instr_mod!(ld_str);
 instr_mod!(mem_ord);
+
 pub mod raw;
+pub mod decode;
 
 pub trait Instr: Any + fmt::Debug + fmt::Display + Decode {}
 
