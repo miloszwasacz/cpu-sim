@@ -1,6 +1,6 @@
 use crate::instr::decode::ITypeFormat;
 use crate::instr::{display_width, Immediate, Instr};
-use crate::reg::RegisterName;
+
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,6 +22,12 @@ impl Fence {
 }
 
 impl Instr for Fence {}
+
+// TODO Properly implement `Execute` and `MemoryAccess` for `Fence`
+impl_execute!(Fence, |&self, _, _, _, _, _| {
+    todo!()
+});
+impl_mem_access!(Fence);
 
 impl fmt::Display for Fence {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -73,8 +79,8 @@ impl From<ITypeFormat> for Fence {
         const FM_MASK: Immediate = 0b1111;
 
         let ITypeFormat { rd, rs1, mut imm } = value;
-        assert_eq!(rd, RegisterName::Zero);
-        assert_eq!(rs1, RegisterName::Zero);
+        assert!(rd.is_zero());
+        assert!(rs1.is_zero());
 
         let sw = imm & FLAG_MASK == 0b1;
         imm >>= FLAG_SHIFT;

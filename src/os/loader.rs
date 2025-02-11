@@ -1,3 +1,4 @@
+use crate::components::cpu::Cpu;
 use crate::components::memory::{Address, Memory};
 
 use elf::endian::LittleEndian;
@@ -8,8 +9,8 @@ use std::path::Path;
 pub struct Loader;
 
 impl Loader {
-    /// Loads the program to memory and returns the entrypoint
-    pub fn load<P: AsRef<Path>>(&self, bin: P, mem: &mut Memory) -> Address {
+    /// Loads the program to memory and initializes the CPU's PC.
+    pub fn load<P: AsRef<Path>>(&self, bin: P, mem: &mut Memory, cpu: &mut Cpu) {
         let bin = fs::read(bin).expect("file should exist and be readable");
 
         let elf = ElfBytes::<LittleEndian>::minimal_parse(&bin)
@@ -26,6 +27,6 @@ impl Loader {
             mem[addr..(addr + size as Address)].copy_from_slice(&bin[offset..(offset + size)])
         }
 
-        elf.ehdr.e_entry as Address
+        cpu.set_entrypoint(elf.ehdr.e_entry as Address);
     }
 }

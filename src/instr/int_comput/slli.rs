@@ -1,3 +1,3 @@
 use super::int_reg_imm_instr;
 
-int_reg_imm_instr!(Slli);
+int_reg_imm_instr!(Slli, sll);

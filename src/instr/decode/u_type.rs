@@ -1,14 +1,14 @@
 use super::shared::decode_rd;
 use super::EncodingFormat;
+use crate::components::cpu::reg::arf::ArchRegName;
 use crate::instr::raw::RawInstr;
 use crate::instr::Immediate;
-use crate::reg::RegisterName;
 
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UTypeFormat {
-    pub rd: RegisterName,
+    pub rd: ArchRegName,
     pub imm: Immediate,
 }
 
@@ -33,11 +33,8 @@ impl EncodingFormat for UTypeFormat {
 
 impl fmt::Display for UTypeFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if f.alternate() {
-            write!(f, "{:#}, {}", self.rd, self.imm)
-        } else {
-            write!(f, "{}, {}", self.rd, self.imm)
-        }
+        self.rd.fmt(f)?;
+        write!(f, ", {}", self.imm)
     }
 }
 

@@ -1,15 +1,15 @@
 use super::shared::{decode_rs1, decode_rs2, Funct3};
 use super::EncodingFormat;
+use crate::components::cpu::reg::arf::ArchRegName;
 use crate::instr::raw::RawInstr;
 use crate::instr::Immediate;
-use crate::reg::RegisterName;
 
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct STypeFormat {
-    pub rs1: RegisterName,
-    pub rs2: RegisterName,
+    pub rs1: ArchRegName,
+    pub rs2: ArchRegName,
     pub imm: Immediate,
 }
 
@@ -36,11 +36,10 @@ impl EncodingFormat for STypeFormat {
 
 impl fmt::Display for STypeFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if f.alternate() {
-            write!(f, "{:#}, {:#}, {}", self.rs1, self.rs2, self.imm)
-        } else {
-            write!(f, "{}, {}, {}", self.rs1, self.rs2, self.imm)
-        }
+        self.rs1.fmt(f)?;
+        write!(f, ", ")?;
+        self.rs2.fmt(f)?;
+        write!(f, ", {}", self.imm)
     }
 }
 

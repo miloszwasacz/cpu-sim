@@ -1,6 +1,6 @@
-use crate::instr::Immediate;
 use super::decode::{ITypeFormat, STypeFormat};
-use crate::reg::RegisterName;
+use crate::components::cpu::reg::arf::ArchRegName;
+use crate::instr::Immediate;
 
 use std::fmt;
 use std::marker::PhantomData;
@@ -18,11 +18,11 @@ instr_mod!(sw);
 pub(crate) struct Load<T>(ITypeFormat, PhantomData<T>);
 
 impl<T> Load<T> {
-    pub fn dest(&self) -> RegisterName {
+    pub fn dest(&self) -> ArchRegName {
         self.0.rd
     }
 
-    pub fn base(&self) -> RegisterName {
+    pub fn base(&self) -> ArchRegName {
         self.0.rs1
     }
 
@@ -39,11 +39,8 @@ impl<T> From<ITypeFormat> for Load<T> {
 
 impl<T> fmt::Display for Load<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if f.alternate() {
-            write!(f, "{:#}, {}({})", self.dest(), self.offset(), self.base())
-        } else {
-            write!(f, "{}, {}({})", self.dest(), self.offset(), self.base())
-        }
+        self.dest().fmt(f)?;
+        write!(f, ", {}({})", self.offset(), self.base())
     }
 }
 
@@ -59,6 +56,30 @@ macro_rules! load_instr {
                 Self(value.into())
             }
         }
+
+        crate::instr::impl_execute!($name, |&self, reg_file, _, _, load_agu, _| {
+            let base = reg_file.get(self.0.base());
+            let addr = load_agu.addr(base.get(), self.0.offset());
+            Ok(crate::instr::execute::ExecuteResult::LoadAgu(
+                self.0.dest(),
+                addr,
+            ))
+        });
+
+        impl crate::instr::mem_access::MemoryAccess for $name {
+            fn load(
+                &self,
+                mem: &crate::components::memory::Memory,
+                address: crate::components::memory::Address,
+            ) -> Result<
+                crate::components::cpu::reg::RegData,
+                crate::components::cpu::error::MemAccessError,
+            > {
+                use crate::components::memory::MemoryAccess;
+                let data: $size = mem.get(address);
+                Ok(data as crate::components::cpu::reg::RegData)
+            }
+        }
     };
 }
 use load_instr;
@@ -67,11 +88,11 @@ use load_instr;
 pub(crate) struct Store<T>(STypeFormat, PhantomData<T>);
 
 impl<T> Store<T> {
-    pub fn base(&self) -> RegisterName {
+    pub fn base(&self) -> ArchRegName {
         self.0.rs1
     }
 
-    pub fn src(&self) -> RegisterName {
+    pub fn src(&self) -> ArchRegName {
         self.0.rs2
     }
 
@@ -88,11 +109,8 @@ impl<T> From<STypeFormat> for Store<T> {
 
 impl<T> fmt::Display for Store<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if f.alternate() {
-            write!(f, "{:#}, {}({})", self.src(), self.offset(), self.base())
-        } else {
-            write!(f, "{}, {}({})", self.src(), self.offset(), self.base())
-        }
+        self.src().fmt(f)?;
+        write!(f, ", {}({})", self.offset(), self.base())
     }
 }
 
@@ -106,6 +124,29 @@ macro_rules! store_instr {
         impl From<crate::instr::decode::STypeFormat> for $name {
             fn from(value: crate::instr::decode::STypeFormat) -> Self {
                 Self(value.into())
+            }
+        }
+
+        crate::instr::impl_execute!($name, |&self, reg_file, _, _, _, store_agu| {
+            let src = reg_file.get(self.0.src());
+            let base = reg_file.get(self.0.base());
+            let addr = store_agu.addr(base.get(), self.0.offset());
+            Ok(crate::instr::execute::ExecuteResult::StoreAgu(
+                addr,
+                src.get(),
+            ))
+        });
+
+        impl crate::instr::mem_access::MemoryAccess for $name {
+            fn store(
+                &self,
+                mem: &mut crate::components::memory::Memory,
+                address: crate::components::memory::Address,
+                data: crate::components::cpu::reg::RegData,
+            ) -> Result<(), crate::components::cpu::error::MemAccessError> {
+                use crate::components::memory::MemoryAccess;
+                mem.set(address, data as $size);
+                Ok(())
             }
         }
     };

@@ -1,7 +1,7 @@
-pub fn decode(instr: RawInstr) -> Box<dyn Instr> {
+pub fn decode(instr: RawInstr) -> Result<Rc<dyn Instr>, RawInstr> {
     #SPECIAL!
     let opcode = decode_opcode(instr);
-    match opcode {
+    Ok(match opcode {
         x if #OPCODES_r! => {
             let funct3 = decode_funct3(instr);
             let funct7 = decode_funct7(instr);
@@ -27,5 +27,5 @@ pub fn decode(instr: RawInstr) -> Box<dyn Instr> {
         #DECODE_u!
         #DECODE_j!
         _ => invalid_instr!(instr),
-    }
+    })
 }

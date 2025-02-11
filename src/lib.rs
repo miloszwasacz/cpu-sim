@@ -3,7 +3,6 @@ use std::any::Any;
 pub mod components;
 pub mod instr;
 pub mod os;
-pub mod reg;
 
 macro_rules! include_generated {
     ($file:literal) => {
@@ -25,6 +24,9 @@ macro_rules! int_impl {
     };
 }
 use int_impl;
+
+const BITS_IN_BYTE: usize = 8;
+const IALIGN: usize = 32;
 
 pub trait AsAny: Any {
     fn as_any(&self) -> &dyn Any;

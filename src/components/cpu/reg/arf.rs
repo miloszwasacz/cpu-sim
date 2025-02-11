@@ -1,44 +1,79 @@
-use crate::instr::raw::Bits;
-use crate::instr::decode::REG_LEN;
+use super::{RegData, RegFile, Register, ARCH_REG_COUNT};
+use crate::instr::raw::{Bits, REG_LEN};
 
 use std::fmt;
 
-pub type RegSize = i32;
+//#region Register File
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum RegisterName {
-    Zero,
-    X(GprId),
-}
+#[derive(Debug, Clone, Copy)]
+pub struct ArchRegFile([Register; ARCH_REG_COUNT]);
 
-pub type GprId = u8;
+impl ArchRegFile {
+    pub const SIZE: usize = ARCH_REG_COUNT;
 
-impl RegisterName {
-    pub const MAX_GPR: u64 = (1 << REG_LEN) - 2;
-
-    pub fn decode(encoded: Bits<REG_LEN>) -> Self {
-        let encoded = u64::from(encoded);
-        match encoded {
-            0 => RegisterName::Zero,
-            #[cfg(debug_assertions)]
-            r if r > Self::MAX_GPR => panic!("x{r} is not a valid register"),
-            r => RegisterName::X(r as GprId),
-        }
+    pub fn new() -> Self {
+        Self(Default::default())
     }
 }
 
-impl fmt::Display for RegisterName {
+impl Default for ArchRegFile {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RegFile for ArchRegFile {
+    type Index = ArchRegName;
+
+    fn get(&self, reg: Self::Index) -> &Register {
+        &self.0[reg.0]
+    }
+
+    fn set(&mut self, reg: Self::Index, data: RegData) {
+        if reg.is_zero() {
+            return;
+        }
+
+        self.0[reg.0].set(data);
+    }
+}
+
+//#endregion
+
+//#region Register Name
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct ArchRegName(usize);
+
+impl ArchRegName {
+    pub const ZERO: Self = Self(0);
+
+    pub fn is_zero(&self) -> bool {
+        self.0 == 0
+    }
+}
+
+impl From<Bits<REG_LEN>> for ArchRegName {
+    fn from(value: Bits<REG_LEN>) -> Self {
+        let name = u64::from(value) as usize;
+        debug_assert!(name < ARCH_REG_COUNT, "x{} is not a valid register", name);
+        Self(name)
+    }
+}
+
+impl From<ArchRegName> for usize {
+    fn from(value: ArchRegName) -> Self {
+        value.0
+    }
+}
+
+impl fmt::Display for ArchRegName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let width = if f.alternate() { 4 } else { 0 };
-        let name = match self {
-            RegisterName::Zero => 0,
-            RegisterName::X(name) => *name,
-        };
-        // println!("{:?}", f.alternate());
         write!(
             f,
             "{:>width$}",
-            match name {
+            match self.0 {
                 // Always zero
                 0 => "zero",
 
@@ -102,3 +137,5 @@ impl fmt::Display for RegisterName {
         )
     }
 }
+
+//#endregion

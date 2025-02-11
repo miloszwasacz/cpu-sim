@@ -124,7 +124,7 @@ mod instr {
             for (name, encoding) in &self.0 {
                 writeln!(
                     f,
-                    "    0b{encoding} => return Box::new({name}::decode(instr)),"
+                    "    0b{encoding} => return Ok(Rc::new({name}::decode(instr))),"
                 )?;
             }
             writeln!(f, "   _ => {{}},")?;
@@ -161,7 +161,7 @@ mod instr {
                     }
                     FormatType::U | FormatType::J => write!(f, "{name}::OPCODE")?,
                 }
-                writeln!(f, ") => Box::new({name}::decode(instr)),")?;
+                writeln!(f, ") => Rc::new({name}::decode(instr)),")?;
             }
             Ok(())
         }
@@ -282,11 +282,8 @@ impl {} {{
 impl std::fmt::Display for {} {{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{
         let width = display_width!(f);
-        if f.alternate() {{
-            write!(f, "{{:<#width$}} {{:#}}", Self::DISPLAY_NAME, self.0)
-        }} else {{
-            write!(f, "{{:<width$}} {{}}", Self::DISPLAY_NAME, self.0)
-        }}
+        write!(f, "{{:<width$}} ", Self::DISPLAY_NAME)?;
+        self.0.fmt(f)
     }}
 }}
 "#,

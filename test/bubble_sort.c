@@ -1,26 +1,21 @@
 // #include<stdio.h>
 
+__attribute__((noreturn)) static inline void exit(int code) {
+    asm volatile("ecall");
+    __builtin_unreachable();
+}
+
 int test(int a, char b) {
     int c = a + b;
     return c;
 }
 
 int main() {
-    int arr[10];
-    arr[0] = 3;
-    arr[1] = 2;
-    arr[2] = 4;
-    arr[3] = 1;
-    arr[4] = 9;
-    arr[5] = 7;
-    arr[6] = 8;
-    arr[7] = 10;
-    arr[8] = 5;
-    arr[9] = 6;
+    int arr[10] = {3,2,4,1,9,7,8,10,5,6};
 
-    int brr[4] = {1,2,3,4};
+    volatile int brr[4] = {1,2,3,4};
     
-    int d = test(2, 3);
+    int d = test(brr[1], brr[2]);
     int n = 10;
     while (n > 1)
     {
@@ -33,6 +28,9 @@ int main() {
                 arr[j+1] = t;
             }
         }
+        n--;
     }
+    exit(arr[0] + d);
+
     // printf("%d", arr[0]);
 }

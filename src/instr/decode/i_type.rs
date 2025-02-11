@@ -1,8 +1,8 @@
 use super::shared::{decode_rd, decode_rs1, Funct3};
 use super::EncodingFormat;
+use crate::components::cpu::reg::arf::ArchRegName;
 use crate::instr::raw::{Bits, RawInstr};
 use crate::instr::Immediate;
-use crate::reg::RegisterName;
 
 use std::fmt;
 
@@ -19,8 +19,8 @@ impl ShiftType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ITypeFormat {
-    pub rd: RegisterName,
-    pub rs1: RegisterName,
+    pub rd: ArchRegName,
+    pub rs1: ArchRegName,
     pub imm: Immediate,
 }
 
@@ -46,11 +46,10 @@ impl EncodingFormat for ITypeFormat {
 
 impl fmt::Display for ITypeFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if f.alternate() {
-            write!(f, "{:#}, {:#}, {}", self.rd, self.rs1, self.imm)
-        } else {
-            write!(f, "{}, {}, {}", self.rd, self.rs1, self.imm)
-        }
+        self.rd.fmt(f)?;
+        write!(f, ", ")?;
+        self.rs1.fmt(f)?;
+        write!(f, ", {}", self.imm)
     }
 }
 

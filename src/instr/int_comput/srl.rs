@@ -1,3 +1,3 @@
 use super::int_reg_reg_op;
 
-int_reg_reg_op!(Srl);
+int_reg_reg_op!(Srl, srl);

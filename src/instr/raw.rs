@@ -1,4 +1,4 @@
-use crate::components::memory::Address;
+pub(crate) use super::decode::REG_LEN;
 
 use const_format::formatcp;
 use std::fmt;
@@ -7,26 +7,20 @@ use std::ops::{BitAnd, BitOr, Not, Shl, Shr};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RawInstr {
     bits: RawInstrBits,
-    addr: Address,
 }
 
-pub type RawInstrBits = u32;
+pub(crate) type RawInstrBits = u32;
 
 impl RawInstr {
-    pub fn new(bits: RawInstrBits, addr: Address) -> RawInstr {
-        Self { bits, addr }
+    pub(crate) fn new(bits: RawInstrBits) -> RawInstr {
+        Self { bits }
     }
 
-    pub fn from_bytes(bytes: [u8; size_of::<RawInstrBits>()], addr: Address) -> RawInstr {
-        let bits = RawInstrBits::from_le_bytes(bytes);
-        Self { bits, addr }
-    }
-
-    pub fn encoding(&self) -> RawInstrBits {
+    pub(crate) fn encoding(&self) -> RawInstrBits {
         self.bits
     }
 
-    pub fn extract_bits<const N: u64, const MSB: u64>(&self) -> Bits<N> {
+    pub(crate) fn extract_bits<const N: u64, const MSB: u64>(&self) -> Bits<N> {
         debug_assert!(
             MSB < MAX_BITS,
             "{}",

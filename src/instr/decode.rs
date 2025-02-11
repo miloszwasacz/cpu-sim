@@ -5,7 +5,7 @@ pub use self::r_type::RTypeFormat;
 pub use self::s_type::STypeFormat;
 pub use self::u_type::UTypeFormat;
 
-pub(crate) use self::generated::decode;
+pub(super) use self::generated::decode;
 pub(crate) use self::shared::REG_LEN;
 use crate::instr::raw::RawInstr;
 use crate::instr::Instr;
@@ -28,8 +28,8 @@ trait EncodingFormat {
 }
 
 mod shared {
+    use crate::components::cpu::reg::arf::ArchRegName;
     use crate::instr::raw::{Bits, RawInstr};
-    use crate::reg::RegisterName;
 
     pub(crate) const REG_LEN: u64 = 5;
 
@@ -68,23 +68,20 @@ mod shared {
         Opcode(instr.extract_bits::<{ Opcode::LEN }, { Opcode::MSB }>())
     }
 
-    pub(crate) fn decode_rd(instr: RawInstr) -> RegisterName {
-        let rd = instr.extract_bits::<RD_LEN, RD_MSB>();
-        RegisterName::decode(rd)
+    pub(crate) fn decode_rd(instr: RawInstr) -> ArchRegName {
+        instr.extract_bits::<RD_LEN, RD_MSB>().into()
     }
 
     pub(crate) fn decode_funct3(instr: RawInstr) -> Funct3 {
         Funct3(instr.extract_bits::<{ Funct3::LEN }, { Funct3::MSB }>())
     }
 
-    pub(crate) fn decode_rs1(instr: RawInstr) -> RegisterName {
-        let rs1 = instr.extract_bits::<RS1_LEN, RS1_MSB>();
-        RegisterName::decode(rs1)
+    pub(crate) fn decode_rs1(instr: RawInstr) -> ArchRegName {
+        instr.extract_bits::<RS1_LEN, RS1_MSB>().into()
     }
 
-    pub(crate) fn decode_rs2(instr: RawInstr) -> RegisterName {
-        let rs2 = instr.extract_bits::<RS2_LEN, RS2_MSB>();
-        RegisterName::decode(rs2)
+    pub(crate) fn decode_rs2(instr: RawInstr) -> ArchRegName {
+        instr.extract_bits::<RS2_LEN, RS2_MSB>().into()
     }
 }
 
@@ -111,10 +108,12 @@ mod generated {
     use crate::instr::raw::RawInstr;
     #[allow(unused_imports)]
     use crate::instr::*;
+    #[allow(unused_imports)]
+    use std::rc::Rc;
 
     macro_rules! invalid_instr {
         ($instr:expr) => {
-            panic!("{} is an invalid or unsupported instruction", $instr)
+            return Err($instr)
         };
     }
 

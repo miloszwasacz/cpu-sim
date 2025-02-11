@@ -1,10 +1,9 @@
 use super::int_reg_imm_instr;
 use crate::instr::display_width;
-use crate::reg::RegisterName;
 
 use std::fmt;
 
-int_reg_imm_instr!(Addi);
+int_reg_imm_instr!(Addi, add);
 
 impl Addi {
     const NOP_DISPLAY_NAME: &'static str = "nop";
@@ -15,69 +14,31 @@ impl Addi {
 impl fmt::Display for Addi {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let width = display_width!(f);
-        match (self.dest(), self.src(), self.imm(), f.alternate()) {
-            (RegisterName::Zero, RegisterName::Zero, 0, true) => {
-                write!(f, "{:<#width$}", Self::NOP_DISPLAY_NAME,)
-            }
-            (RegisterName::Zero, RegisterName::Zero, 0, false) => {
-                write!(f, "{:<width$}", Self::NOP_DISPLAY_NAME,)
-            }
-            (_, RegisterName::Zero, _, true) => {
-                write!(
-                    f,
-                    "{:<#width$} {:#}, {}",
-                    Self::LI_DISPLAY_NAME,
-                    self.dest(),
-                    self.imm()
-                )
-            }
-            (_, RegisterName::Zero, _, false) => {
-                write!(
-                    f,
-                    "{:<width$} {}, {}",
-                    Self::LI_DISPLAY_NAME,
-                    self.dest(),
-                    self.imm()
-                )
-            }
-            (_, _, 0, true) => {
-                write!(
-                    f,
-                    "{:<#width$} {:#}, {:#}",
-                    Self::MV_DISPLAY_NAME,
-                    self.dest(),
-                    self.src()
-                )
-            }
-            (_, _, 0, false) => {
-                write!(
-                    f,
-                    "{:<width$} {}, {}",
-                    Self::MV_DISPLAY_NAME,
-                    self.dest(),
-                    self.src()
-                )
-            }
-            (_, _, _, true) => {
-                write!(
-                    f,
-                    "{:<#width$} {:#}, {:#}, {}",
-                    Self::DISPLAY_NAME,
-                    self.dest(),
-                    self.src(),
-                    self.imm()
-                )
-            }
-            (_, _, _, false) => {
-                write!(
-                    f,
-                    "{:<width$} {}, {}, {}",
-                    Self::DISPLAY_NAME,
-                    self.dest(),
-                    self.src(),
-                    self.imm()
-                )
+
+        let is_li = self.src().is_zero();
+        let is_mv = self.imm() == 0;
+
+        if self.dest().is_zero() && is_li && is_mv {
+            return write!(f, "{:<width$}", Self::NOP_DISPLAY_NAME);
+        }
+
+        let name = if is_li {
+            Self::LI_DISPLAY_NAME
+        } else if is_mv {
+            Self::MV_DISPLAY_NAME
+        } else {
+            Self::DISPLAY_NAME
+        };
+        write!(f, "{:<width$} ", name)?;
+        self.dest().fmt(f)?;
+        if !is_li {
+            write!(f, ", ")?;
+            self.src().fmt(f)?;
+            if is_mv {
+                return Ok(());
             }
         }
+        write!(f, ", ")?;
+        self.imm().fmt(f)
     }
 }

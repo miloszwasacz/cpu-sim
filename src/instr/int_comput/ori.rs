@@ -1,3 +1,3 @@
 use super::int_reg_imm_instr;
 
-int_reg_imm_instr!(Ori);
+int_reg_imm_instr!(Ori, or);
