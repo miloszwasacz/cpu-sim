@@ -1,7 +1,10 @@
 use super::{EncodingFormat, UTypeFormat};
+use crate::components::cpu::reg::arf::ArchRegName;
 use crate::instr::raw::RawInstr;
+use crate::instr::stall::StallControl;
 use crate::instr::Immediate;
 
+use std::collections::HashSet;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,6 +17,16 @@ impl JTypeFormat {
 impl EncodingFormat for JTypeFormat {
     fn decode(instr: RawInstr) -> Self {
         Self(UTypeFormat::generic_decode(instr, decode_imm))
+    }
+}
+
+impl StallControl for JTypeFormat {
+    fn read_regs(&self) -> HashSet<ArchRegName> {
+        self.0.read_regs()
+    }
+
+    fn write_reg(&self) -> Option<ArchRegName> {
+        self.0.write_reg()
     }
 }
 

@@ -34,6 +34,7 @@ pub(super) struct ExecutionEngine {
     store_agu_regs: PipelineRegs<StoreAguRegs>,
 
     // Writeback
+    writeback_regs: PipelineRegs<WritebackRegs>,
     reg_file_write_regs: PipelineRegs<RegFileRegs>,
 }
 
@@ -48,6 +49,8 @@ impl ExecutionEngine {
         let load_agu_regs = make_pipeline_regs();
         let store_agu = Agu::new().into();
         let store_agu_regs = make_pipeline_regs();
+
+        let writeback_regs = make_pipeline_regs();
         let reg_file_write_regs = make_pipeline_regs();
 
         Self {
@@ -60,12 +63,36 @@ impl ExecutionEngine {
             load_agu_regs,
             store_agu,
             store_agu_regs,
+
+            writeback_regs,
             reg_file_write_regs,
         }
     }
 
     pub(super) unsafe fn int_reg_file(&mut self) -> &mut ArchRegFile {
         self.int_reg_file.inner_mut()
+    }
+
+    pub(super) fn id_ex_write_reg(&self) -> Option<ArchRegName> {
+        unsafe {
+            self.decode_regs
+                .borrow()
+                .inner()
+                .instr
+                .as_ref()
+                .and_then(|instr| instr.write_reg())
+        }
+    }
+
+    pub(super) fn mem_wb_write_reg(&self) -> Option<ArchRegName> {
+        unsafe {
+            self.writeback_regs
+                .borrow()
+                .inner()
+                .instr
+                .as_ref()
+                .and_then(|instr| instr.write_reg())
+        }
     }
 
     pub(super) fn alu_regs(&self) -> &PipelineRegs<AluRegs> {
@@ -78,6 +105,10 @@ impl ExecutionEngine {
 
     pub(super) fn store_agu_regs(&self) -> &PipelineRegs<StoreAguRegs> {
         &self.store_agu_regs
+    }
+
+    pub(super) fn writeback_regs(&self) -> &PipelineRegs<WritebackRegs> {
+        &self.writeback_regs
     }
 
     pub(super) fn reg_file_write_regs(&self) -> &PipelineRegs<RegFileRegs> {
@@ -195,6 +226,11 @@ pub(super) struct StoreAguRegs {
     pub instr: Option<Rc<dyn Instr>>,
     pub addr: Address,
     pub data: RegData,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct WritebackRegs {
+    pub instr: Option<Rc<dyn Instr>>,
 }
 
 //#endregion

@@ -1,10 +1,12 @@
 use self::decoder::Decoder;
 use super::circuit::{Circuit, ClockCycle};
 use super::error::{DecodeError, FetchError};
-use super::{make_pipeline_regs, PipelineRegs, ProgramCounter};
+use super::reg::arf::ArchRegName;
+use super::{make_pipeline_regs, PipelineRegs, ProgramCounter, Stall};
 use crate::components::memory::{Address, Memory, MemoryAccess};
 use crate::components::Bus;
 use crate::instr::raw::RawInstr;
+use crate::instr::stall::nop;
 use crate::instr::Instr;
 use crate::{BITS_IN_BYTE, IALIGN};
 
@@ -37,7 +39,7 @@ impl<'m> FrontEnd<'m> {
         &self.decode_regs
     }
 
-    pub fn fetch(&mut self, pc: &mut ProgramCounter) -> Result<(), FetchError> {
+    pub fn fetch(&mut self, pc: &mut ProgramCounter, stall: Stall) -> Result<(), FetchError> {
         const ALIGN: usize = IALIGN / BITS_IN_BYTE;
 
         let addr = pc.read();
@@ -46,16 +48,25 @@ impl<'m> FrontEnd<'m> {
         }
         let bits = self.mem_bus.read(ClockCycle::Full).borrow().get(addr);
 
+        if stall {
+            return Ok(());
+        }
+
         *self.fetch_regs.borrow_mut().write(ClockCycle::SecondHalf) = FetchRegs {
             instr: Some(RawInstr::new(bits)),
             addr,
         };
-
         pc.advance();
+
         Ok(())
     }
 
-    pub fn decode(&mut self) -> Result<(), DecodeError> {
+    pub fn decode(
+        &mut self,
+        id_ex_write_reg: Option<ArchRegName>,
+        ex_mem_write_reg: Option<ArchRegName>,
+        mem_wb_write_reg: Option<ArchRegName>,
+    ) -> Result<Stall, DecodeError> {
         let decoder = self.decoder.read(ClockCycle::FirstHalf);
         let fetch_regs_circ = self.fetch_regs.borrow();
         let fetch_regs = fetch_regs_circ.read(ClockCycle::FirstHalf);
@@ -66,12 +77,23 @@ impl<'m> FrontEnd<'m> {
             .map(|instr| decoder.decode(*instr))
             .transpose()?;
 
+        let stall = instr
+            .as_ref()
+            .map(|instr| {
+                let read_regs = instr.read_regs();
+                [id_ex_write_reg, ex_mem_write_reg, mem_wb_write_reg]
+                    .iter()
+                    .flatten()
+                    .any(|write_reg| read_regs.contains(write_reg))
+            })
+            .unwrap_or_default();
+
         *self.decode_regs.borrow_mut().write(ClockCycle::SecondHalf) = DecodeRegs {
-            instr,
+            instr: if stall { Some(nop()) } else { instr },
             addr: fetch_regs.addr,
         };
 
-        Ok(())
+        Ok(stall)
     }
 
     pub fn finish_fetch_cycle(&mut self) {

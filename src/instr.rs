@@ -2,6 +2,7 @@ use self::decode::*;
 use self::execute::Execute;
 use self::mem_access::MemoryAccess;
 use self::raw::RawInstr;
+use self::stall::StallControl;
 use crate::include_generated;
 
 use std::any::Any;
@@ -54,8 +55,12 @@ pub mod decode;
 pub mod execute;
 pub mod mem_access;
 pub mod raw;
+pub mod stall;
 
-pub trait Instr: Any + fmt::Debug + fmt::Display + Decode + Execute + MemoryAccess {}
+pub trait Instr:
+    Any + fmt::Debug + fmt::Display + Decode + Execute + MemoryAccess + StallControl
+{
+}
 
 pub type Immediate = i32;
 

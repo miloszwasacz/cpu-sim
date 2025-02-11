@@ -2,8 +2,10 @@ use super::shared::{decode_rd, decode_rs1, Funct3};
 use super::EncodingFormat;
 use crate::components::cpu::reg::arf::ArchRegName;
 use crate::instr::raw::{Bits, RawInstr};
+use crate::instr::stall::{write_reg, StallControl};
 use crate::instr::Immediate;
 
+use std::collections::HashSet;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,6 +43,20 @@ impl ITypeFormat {
 impl EncodingFormat for ITypeFormat {
     fn decode(instr: RawInstr) -> Self {
         Self::generic_decode(instr, decode_imm)
+    }
+}
+
+impl StallControl for ITypeFormat {
+    fn read_regs(&self) -> HashSet<ArchRegName> {
+        if self.rs1.is_zero() {
+            HashSet::new()
+        } else {
+            HashSet::from([self.rs1])
+        }
+    }
+
+    fn write_reg(&self) -> Option<ArchRegName> {
+        write_reg(self.rd)
     }
 }
 

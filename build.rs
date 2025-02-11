@@ -20,10 +20,10 @@ mod instr {
 
     use convert_case::{Boundary, Case, Casing};
     use itertools::Itertools;
+    use std::cmp::Ordering;
     use std::ffi::OsString;
     use std::path::{Path, PathBuf};
     use std::{fmt, fs};
-    use std::cmp::Ordering;
 
     macro_rules! tag {
         ($tag:expr) => {
@@ -45,6 +45,7 @@ mod instr {
     const OUT_DECODE_FN_FILE: &str = "decode_fn.rs";
     const OUT_DECODE_IMPLS_FILE: &str = "decode_impls.rs";
     const OUT_FROM_FORMAT_IMPLS_FILE: &str = "from_format_impls.rs";
+    const OUT_STALL_CONTROL_IMPLS_FILE: &str = "stall_control_impls.rs";
     const OUT_DISPLAY_IMPLS_FILE: &str = "display_impls.rs";
 
     const TAG_SPECIAL: &str = "SPECIAL";
@@ -104,11 +105,13 @@ mod instr {
 
         let decode_impls = format!("{}", Impls(&instrs, DecodeImpl));
         let from_format_impls = format!("{}", Impls(&instrs, FromFormatImpl));
+        let stall_control_impls = format!("{}", Impls(&instrs, StallControlImpl));
         let display_impls = format!("{}", Impls(&instrs, DisplayImpl));
 
         write_out!(out_dir, OUT_DECODE_FN_FILE, template);
         write_out!(out_dir, OUT_DECODE_IMPLS_FILE, decode_impls);
         write_out!(out_dir, OUT_FROM_FORMAT_IMPLS_FILE, from_format_impls);
+        write_out!(out_dir, OUT_STALL_CONTROL_IMPLS_FILE, stall_control_impls);
         write_out!(out_dir, OUT_DISPLAY_IMPLS_FILE, display_impls);
 
         println!("cargo::rerun-if-changed={}/{}", BUILD_DIR, SPEC_FILE);
@@ -156,9 +159,10 @@ mod instr {
                     FormatType::I(false) | FormatType::S | FormatType::B => {
                         write!(f, "({name}::OPCODE, {name}::FUNCT3)")?
                     }
-                    FormatType::I(true) => {
-                        write!(f, "({name}::OPCODE, {name}::FUNCT3) && shift_type == {name}::SHIFT_TYPE")?
-                    }
+                    FormatType::I(true) => write!(
+                        f,
+                        "({name}::OPCODE, {name}::FUNCT3) && shift_type == {name}::SHIFT_TYPE"
+                    )?,
                     FormatType::U | FormatType::J => write!(f, "{name}::OPCODE")?,
                 }
                 writeln!(f, ") => Rc::new({name}::decode(instr)),")?;
@@ -207,11 +211,7 @@ impl {} {{
                 | Format::S { funct3 }
                 | Format::B { funct3 }
                 | Format::IShift { funct3, .. } => {
-                    writeln!(
-                        f,
-                        "   const FUNCT3: Funct3 = Funct3::new(0b{});",
-                        funct3
-                    )?;
+                    writeln!(f, "   const FUNCT3: Funct3 = Funct3::new(0b{});", funct3)?;
                 }
                 Format::U | Format::J => {}
                 Format::Special { .. } => unreachable!(),
@@ -221,18 +221,18 @@ impl {} {{
             writeln!(
                 f,
                 r#"
-impl Decode for {} {{
+impl Decode for {name} {{
     fn decode(instr: RawInstr) -> Self
     where
         Self: Sized
     {{
-        {}TypeFormat::{}(instr).into()
+        {format}TypeFormat::{decode_instr}(instr).into()
     }}
 }}
 "#,
-                self.0.name,
-                self.0.format.ty(),
-                match self.0.format.ty() {
+                name = self.0.name,
+                format = self.0.format.ty(),
+                decode_instr = match self.0.format.ty() {
                     FormatType::I(true) => "decode_shift_instr",
                     _ => "decode",
                 }
@@ -258,6 +258,31 @@ impl From<{format}TypeFormat> for {name} {{
 "#,
                 name = self.0.name,
                 format = self.0.format.ty(),
+            )
+        }
+    }
+
+    struct StallControlImpl<'a, 'i>(&'a Instr<'i>);
+    impl fmt::Display for StallControlImpl<'_, '_> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            if !self.0.auto_stall {
+                return Ok(());
+            }
+
+            write!(
+                f,
+                r#"
+impl StallControl for {} {{
+    fn read_regs(&self) -> HashSet<ArchRegName> {{
+        self.0.read_regs()
+    }}
+
+    fn write_reg(&self) -> Option<ArchRegName> {{
+        self.0.write_reg()
+    }}
+}}
+"#,
+                self.0.name
             )
         }
     }
@@ -315,6 +340,7 @@ impl std::fmt::Display for {} {{
         opcode: &'a str,
         format: Format<'a>,
         auto_from: bool,
+        auto_stall: bool,
         auto_display: bool,
     }
 
@@ -355,6 +381,7 @@ impl std::fmt::Display for {} {{
 
             let format = next!(line, full_line);
             let auto_from = next!(line, full_line);
+            let auto_stall = next!(line, full_line);
             let auto_display = next!(line, full_line);
             let opcode = next!(line, full_line);
 
@@ -390,6 +417,7 @@ impl std::fmt::Display for {} {{
                 format => panic!("{} is not a valid format", format),
             };
             let auto_from = auto_derive!(auto_from, format);
+            let auto_stall = auto_derive!(auto_stall, format);
             let auto_display = auto_derive!(auto_display, format);
 
             Self {
@@ -398,6 +426,7 @@ impl std::fmt::Display for {} {{
                 opcode,
                 format,
                 auto_from,
+                auto_stall,
                 auto_display,
             }
         }
@@ -455,7 +484,7 @@ impl std::fmt::Display for {} {{
         U,
         J,
     }
-    
+
     impl FormatType {
         pub fn file_suffix(&self) -> &'static str {
             match self {

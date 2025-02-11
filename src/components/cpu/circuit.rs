@@ -116,6 +116,10 @@ impl<T> Circuit<T> {
         }
     }
     
+    pub unsafe fn inner(&self) -> &T {
+        &self.element
+    } 
+    
     pub unsafe fn inner_mut(&mut self) -> &mut T {
         &mut self.element
     }

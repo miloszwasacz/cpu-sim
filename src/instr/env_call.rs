@@ -23,6 +23,21 @@ macro_rules! system_instr {
 
         impl crate::instr::Instr for $name {}
 
+        impl crate::instr::stall::StallControl for $name {
+            fn read_regs(
+                &self,
+            ) -> std::collections::HashSet<crate::components::cpu::reg::arf::ArchRegName> {
+                let regs: [_; crate::components::cpu::reg::arf::ArchRegFile::SIZE] = std::array::from_fn(|reg| {
+                    reg.try_into().unwrap()
+                });
+                std::collections::HashSet::from(regs)
+            }
+
+            fn write_reg(&self) -> Option<crate::components::cpu::reg::arf::ArchRegName> {
+                None
+            }
+        }
+
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 let width = crate::instr::display_width!(f);

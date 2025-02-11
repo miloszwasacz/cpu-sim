@@ -22,6 +22,7 @@ mod front_end;
 mod mem_subsystem;
 pub mod reg;
 
+type Stall = bool;
 pub type ExitCode = i32;
 
 pub enum CpuRun {
@@ -47,6 +48,7 @@ impl<'m> Cpu<'m> {
             exec_engine.load_agu_regs(),
             exec_engine.store_agu_regs(),
             mem_bus,
+            exec_engine.writeback_regs(),
             exec_engine.reg_file_write_regs(),
         );
 
@@ -80,11 +82,18 @@ impl<'m> Cpu<'m> {
             self.exec_engine.finish_execute_cycle();
 
             // println!("Decode");
-            self.front_end.decode().map_err(Box::new)?;
+            let stall = self
+                .front_end
+                .decode(
+                    self.exec_engine.id_ex_write_reg(),
+                    self.mem_subsystem.ex_mem_write_reg(),
+                    self.exec_engine.mem_wb_write_reg(),
+                )
+                .map_err(Box::new)?;
             self.front_end.finish_decode_cycle();
 
             // println!("Fetch");
-            self.front_end.fetch(&mut self.pc).map(Box::new)?;
+            self.front_end.fetch(&mut self.pc, stall).map(Box::new)?;
             self.front_end.finish_fetch_cycle();
 
             // println!();

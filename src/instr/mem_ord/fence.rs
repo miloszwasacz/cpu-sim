@@ -1,6 +1,9 @@
+use crate::components::cpu::reg::arf::ArchRegName;
 use crate::instr::decode::ITypeFormat;
+use crate::instr::stall::StallControl;
 use crate::instr::{display_width, Immediate, Instr};
 
+use std::collections::HashSet;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,11 +26,19 @@ impl Fence {
 
 impl Instr for Fence {}
 
-// TODO Properly implement `Execute` and `MemoryAccess` for `Fence`
-impl_execute!(Fence, |&self, _, _, _, _, _| {
-    todo!()
-});
+// TODO Properly implement `Execute`, `MemoryAccess` and `StallControl` for `Fence`
+impl_execute!(Fence, |&self, _, _, _, _, _| { todo!() });
 impl_mem_access!(Fence);
+
+impl StallControl for Fence {
+    fn read_regs(&self) -> HashSet<ArchRegName> {
+        todo!()
+    }
+
+    fn write_reg(&self) -> Option<ArchRegName> {
+        todo!()
+    }
+}
 
 impl fmt::Display for Fence {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

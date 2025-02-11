@@ -2,7 +2,9 @@ use super::shared::{decode_rd, decode_rs1, decode_rs2, Funct3};
 use super::EncodingFormat;
 use crate::components::cpu::reg::arf::ArchRegName;
 use crate::instr::raw::{Bits, RawInstr};
+use crate::instr::stall::{read_regs_from_iter, write_reg, StallControl};
 
+use std::collections::HashSet;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,6 +32,16 @@ impl EncodingFormat for RTypeFormat {
         let rs2 = decode_rs2(instr);
 
         Self { rd, rs1, rs2 }
+    }
+}
+
+impl StallControl for RTypeFormat {
+    fn read_regs(&self) -> HashSet<ArchRegName> {
+        read_regs_from_iter([self.rs1, self.rs2])
+    }
+
+    fn write_reg(&self) -> Option<ArchRegName> {
+        write_reg(self.rd)
     }
 }
 

@@ -1,7 +1,9 @@
 use super::decode::{ITypeFormat, STypeFormat};
+use super::stall::StallControl;
+use super::Immediate;
 use crate::components::cpu::reg::arf::ArchRegName;
-use crate::instr::Immediate;
 
+use std::collections::HashSet;
 use std::fmt;
 use std::marker::PhantomData;
 
@@ -34,6 +36,16 @@ impl<T> Load<T> {
 impl<T> From<ITypeFormat> for Load<T> {
     fn from(value: ITypeFormat) -> Self {
         Self(value, PhantomData)
+    }
+}
+
+impl<T> StallControl for Load<T> {
+    fn read_regs(&self) -> HashSet<ArchRegName> {
+        self.0.read_regs()
+    }
+
+    fn write_reg(&self) -> Option<ArchRegName> {
+        self.0.write_reg()
     }
 }
 
@@ -104,6 +116,16 @@ impl<T> Store<T> {
 impl<T> From<STypeFormat> for Store<T> {
     fn from(value: STypeFormat) -> Self {
         Self(value, PhantomData)
+    }
+}
+
+impl<T> StallControl for Store<T> {
+    fn read_regs(&self) -> HashSet<ArchRegName> {
+        self.0.read_regs()
+    }
+
+    fn write_reg(&self) -> Option<ArchRegName> {
+        self.0.write_reg()
     }
 }
 

@@ -2,8 +2,10 @@ use super::shared::decode_rd;
 use super::EncodingFormat;
 use crate::components::cpu::reg::arf::ArchRegName;
 use crate::instr::raw::RawInstr;
+use crate::instr::stall::{write_reg, StallControl};
 use crate::instr::Immediate;
 
+use std::collections::HashSet;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,6 +30,16 @@ impl UTypeFormat {
 impl EncodingFormat for UTypeFormat {
     fn decode(instr: RawInstr) -> Self {
         Self::generic_decode(instr, decode_imm)
+    }
+}
+
+impl StallControl for UTypeFormat {
+    fn read_regs(&self) -> HashSet<ArchRegName> {
+        HashSet::new()
+    }
+
+    fn write_reg(&self) -> Option<ArchRegName> {
+        write_reg(self.rd)
     }
 }
 

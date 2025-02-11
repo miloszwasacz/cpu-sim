@@ -7,6 +7,7 @@ pub use self::u_type::UTypeFormat;
 
 pub(super) use self::generated::decode;
 pub(crate) use self::shared::REG_LEN;
+use super::stall::StallControl;
 use crate::instr::raw::RawInstr;
 use crate::instr::Instr;
 
@@ -23,7 +24,7 @@ pub trait Decode {
         Self: Sized;
 }
 
-trait EncodingFormat {
+trait EncodingFormat: StallControl {
     fn decode(instr: RawInstr) -> Self;
 }
 

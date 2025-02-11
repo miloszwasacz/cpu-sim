@@ -1,6 +1,7 @@
 use super::{RegData, RegFile, Register, ARCH_REG_COUNT};
 use crate::instr::raw::{Bits, REG_LEN};
 
+use std::error::Error;
 use std::fmt;
 
 //#region Register File
@@ -75,6 +76,18 @@ impl From<ArchRegName> for usize {
     }
 }
 
+impl TryFrom<usize> for ArchRegName {
+    type Error = ArchRegNameConvertError;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        if value < ARCH_REG_COUNT {
+            Ok(Self(value))
+        } else {
+            Err(ArchRegNameConvertError(value))
+        }
+    }
+}
+
 impl fmt::Display for ArchRegName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let width = if f.alternate() { 4 } else { 0 };
@@ -145,5 +158,16 @@ impl fmt::Display for ArchRegName {
         )
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArchRegNameConvertError(usize);
+
+impl fmt::Display for ArchRegNameConvertError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "x{} is not a valid register", self.0)
+    }
+}
+
+impl Error for ArchRegNameConvertError {}
 
 //#endregion
