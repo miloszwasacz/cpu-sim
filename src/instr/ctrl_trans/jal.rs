@@ -27,8 +27,7 @@ impl Instr for Jal {}
 impl_execute!(Jal, |&self, _, pc, alu, _, _| {
     let target = alu.add(pc.read() as RegData, self.offset());
     let link = pc.read_next();
-    pc.write(target as Address);
-    Ok(ExecuteResult::Alu(self.dest(), link as RegData))
+    Ok(ExecuteResult::Jump(target as Address, self.dest(), link))
 });
 
 impl_mem_access!(Jal);

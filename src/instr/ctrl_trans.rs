@@ -39,10 +39,12 @@ macro_rules! branch_execute_common {
         let base = $pc.read() as crate::components::cpu::reg::RegData;
         let target = $alu.add(base, $self.offset());
 
-        if $src1.$cmp(&$src2) {
-            $pc.write(target as crate::components::memory::Address);
-        }
-        Ok(crate::instr::execute::ExecuteResult::Branch)
+        let target = if $src1.$cmp(&$src2) {
+            Some(target as crate::components::memory::Address)
+        } else {
+            None
+        };
+        Ok(crate::instr::execute::ExecuteResult::Branch(target))
     }};
 }
 use branch_execute_common;

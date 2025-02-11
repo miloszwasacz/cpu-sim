@@ -25,7 +25,7 @@ macro_rules! impl_execute {
             fn execute(
                 &$self,
                 $reg_file: &dyn crate::components::cpu::reg::RegFile<Index = crate::components::cpu::reg::arf::ArchRegName>,
-                $pc: &mut crate::components::cpu::ProgramCounter,
+                $pc: crate::components::cpu::ProgramCounter,
                 $alu: &mut crate::components::cpu::Alu,
                 $load_agu: &mut crate::components::cpu::Agu,
                 $store_agu: &mut crate::components::cpu::Agu,

@@ -8,7 +8,7 @@ pub trait Execute {
     fn execute(
         &self,
         reg_file: &dyn RegFile<Index = ArchRegName>,
-        pc: &mut ProgramCounter,
+        pc: ProgramCounter,
         alu: &mut Alu,
         load_agu: &mut Agu,
         store_agu: &mut Agu,
@@ -18,7 +18,8 @@ pub trait Execute {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecuteResult {
     Alu(ArchRegName, RegData),
-    Branch,
+    Jump(Address, ArchRegName, Address),
+    Branch(Option<Address>),
     LoadAgu(ArchRegName, Address),
     StoreAgu(Address, RegData),
     Ecall,

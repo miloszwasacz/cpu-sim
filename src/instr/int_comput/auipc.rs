@@ -11,7 +11,7 @@ impl Execute for Auipc {
     fn execute(
         &self,
         _: &dyn RegFile<Index = ArchRegName>,
-        pc: &mut ProgramCounter,
+        pc: ProgramCounter,
         alu: &mut Alu,
         _: &mut Agu,
         _: &mut Agu,

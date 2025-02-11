@@ -44,9 +44,7 @@ impl<'m> Cpu<'m> {
         let front_end = FrontEnd::new(mem_bus);
         let exec_engine = ExecutionEngine::new(front_end.decode_regs());
         let mem_subsystem = MemorySubsystem::new(
-            exec_engine.alu_regs(),
-            exec_engine.load_agu_regs(),
-            exec_engine.store_agu_regs(),
+            exec_engine.execute_regs(),
             mem_bus,
             exec_engine.writeback_regs(),
             exec_engine.reg_file_write_regs(),
@@ -67,43 +65,12 @@ impl<'m> Cpu<'m> {
 
     pub fn run(&mut self) -> Result<CpuRun, Box<dyn Error>> {
         loop {
-            // The order is reversed to mimic parallelism
-
-            // println!("Writeback");
-            self.exec_engine.writeback().map_err(Box::new)?;
-            self.exec_engine.finish_writeback_cycle();
-
-            // println!("Memory Access");
-            self.mem_subsystem.memory_access().map_err(Box::new)?;
-            self.mem_subsystem.finish_memory_access_cycle();
-
-            // println!("Execute");
-            let trap = self.exec_engine.execute(&mut self.pc).map_err(Box::new)?;
-            self.exec_engine.finish_execute_cycle();
-
-            // println!("Decode");
-            let stall = self
-                .front_end
-                .decode(
-                    self.exec_engine.id_ex_write_reg(),
-                    self.mem_subsystem.ex_mem_write_reg(),
-                    self.exec_engine.mem_wb_write_reg(),
-                )
-                .map_err(Box::new)?;
-            self.front_end.finish_decode_cycle();
-
-            // println!("Fetch");
-            self.front_end.fetch(&mut self.pc, stall).map(Box::new)?;
-            self.front_end.finish_fetch_cycle();
-
-            // println!();
-
+            let trap = self.tick()?;
             match trap {
-                EnvTrap::None => self.pc.finish_cycle(),
+                EnvTrap::None => {}
                 EnvTrap::Syscall(pc) => {
-                    let exit_code = self.handle_syscall();
-                    self.save_pc(pc);
-                    if let Some(exit_code) = exit_code {
+                    if let Some(exit_code) = self.handle_syscall() {
+                        self.save_pc(pc);
                         return Ok(CpuRun::Exit(exit_code));
                     }
                 }
@@ -115,26 +82,57 @@ impl<'m> Cpu<'m> {
         }
     }
 
-    // pub fn tick(&mut self) -> Result<Box<dyn Error>> {
-    //     // The order is reversed to mimic parallelism
-    //     self.exec_engine.writeback();
-    //     self.mem_subsystem.memory_access().map_err(Box::new)?;
-    //     self.exec_engine.execute().map_err(Box::new)?;
-    //     self.front_end.decode().map_err(Box::new)?;
-    //     self.front_end.fetch(&mut self.pc).map(Box::new)?;
-    //
-    //     Ok(())
-    // }
+    fn tick(&mut self) -> Result<EnvTrap, Box<dyn Error>> {
+        // The order is reversed to mimic parallelism
 
-    fn save_pc(&mut self, pc: Address) {
-        self.pc.write(pc);
+        // println!("Writeback");
+        let mem_wb_write_reg = self.exec_engine.mem_wb_write_reg();
+        self.exec_engine.writeback().map_err(Box::new)?;
+
+        // println!("Memory Access");
+        let ex_mem_write_reg = self.mem_subsystem.ex_mem_write_reg();
+        let jump_target = self.mem_subsystem.memory_access().map_err(Box::new)?;
+
+        // println!("Execute");
+        let id_ex_write_reg = self.exec_engine.id_ex_write_reg();
+        let trap = self.exec_engine.execute().map_err(Box::new)?;
+
+        // println!("Decode");
+        let stall = self
+            .front_end
+            .decode(id_ex_write_reg, ex_mem_write_reg, mem_wb_write_reg)
+            .map_err(Box::new)?;
+
+        // println!("Fetch");
+        self.front_end.fetch(&mut self.pc, stall).map(Box::new)?;
+
+        // println!();
+        self.exec_engine.finish_writeback_cycle();
+        self.mem_subsystem.finish_memory_access_cycle();
+        self.exec_engine.finish_execute_cycle();
+        self.front_end.finish_decode_cycle();
+        self.front_end.finish_fetch_cycle();
+        self.pc.finish_cycle();
+
+        if let Some(jump_target) = jump_target {
+            self.pc.write(jump_target);
+            self.exec_engine.flush();
+            self.front_end.flush();
+        }
+
+        Ok(trap)
+    }
+
+    fn save_pc(&mut self, pc: ProgramCounter) {
+        self.pc = pc;
         self.pc.advance();
         self.pc.finish_cycle();
     }
 
     fn handle_syscall(&mut self) -> Option<ExitCode> {
         let reg_file = unsafe { self.exec_engine.int_reg_file() };
-        let syscall = SyscallCode::try_from(reg_file.get(ArchRegName::SYSCALL_CODE).get()).unwrap();
+        // TODO Log unknown syscalls
+        let syscall = SyscallCode::try_from(reg_file.get(ArchRegName::SYSCALL_CODE).get()).ok()?;
         match syscall {
             SyscallCode::Exit => Some(reg_file.get(ArchRegName::A0).get()),
         }
@@ -143,7 +141,7 @@ impl<'m> Cpu<'m> {
 
 //#region PC
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ProgramCounter {
     current: Register,
     next: Register,
@@ -181,6 +179,10 @@ type PipelineRegs<T> = Rc<RefCell<Circuit<T>>>;
 
 fn make_pipeline_regs<T: Default>() -> PipelineRegs<T> {
     Rc::new(RefCell::new(Circuit::new(Default::default())))
+}
+
+fn flush_pipeline_regs<T: Default>(regs: &mut PipelineRegs<T>) {
+    unsafe { *regs.borrow_mut().inner_mut() = Default::default() }
 }
 
 //#endregion

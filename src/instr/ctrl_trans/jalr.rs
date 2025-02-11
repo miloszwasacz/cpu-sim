@@ -33,8 +33,7 @@ impl_execute!(Jalr, |&self, reg_file, pc, alu, _, _| {
     let base = reg_file.get(self.base());
     let target = alu.add(base.get(), self.offset()) & MASK;
     let link = pc.read_next();
-    pc.write(target as Address);
-    Ok(ExecuteResult::Alu(self.dest(), link as RegData))
+    Ok(ExecuteResult::Jump(target as Address, self.dest(), link))
 });
 
 impl_mem_access!(Jalr);

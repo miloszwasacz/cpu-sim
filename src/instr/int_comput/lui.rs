@@ -11,7 +11,7 @@ impl Execute for Lui {
     fn execute(
         &self,
         _: &dyn RegFile<Index = ArchRegName>,
-        _: &mut ProgramCounter,
+        _: ProgramCounter,
         _: &mut Alu,
         _: &mut Agu,
         _: &mut Agu,

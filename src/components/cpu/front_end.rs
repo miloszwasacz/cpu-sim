@@ -2,7 +2,7 @@ use self::decoder::Decoder;
 use super::circuit::{Circuit, ClockCycle};
 use super::error::{DecodeError, FetchError};
 use super::reg::arf::ArchRegName;
-use super::{make_pipeline_regs, PipelineRegs, ProgramCounter, Stall};
+use super::{flush_pipeline_regs, make_pipeline_regs, PipelineRegs, ProgramCounter, Stall};
 use crate::components::memory::{Address, Memory, MemoryAccess};
 use crate::components::Bus;
 use crate::instr::raw::RawInstr;
@@ -52,11 +52,11 @@ impl<'m> FrontEnd<'m> {
             return Ok(());
         }
 
+        pc.advance();
         *self.fetch_regs.borrow_mut().write(ClockCycle::SecondHalf) = FetchRegs {
             instr: Some(RawInstr::new(bits)),
-            addr,
+            pc: *pc,
         };
-        pc.advance();
 
         Ok(())
     }
@@ -90,7 +90,7 @@ impl<'m> FrontEnd<'m> {
 
         *self.decode_regs.borrow_mut().write(ClockCycle::SecondHalf) = DecodeRegs {
             instr: if stall { Some(nop()) } else { instr },
-            addr: fetch_regs.addr,
+            pc: fetch_regs.pc,
         };
 
         Ok(stall)
@@ -102,20 +102,24 @@ impl<'m> FrontEnd<'m> {
     }
 
     pub fn finish_decode_cycle(&mut self) {
-        self.fetch_regs.borrow_mut().reset();
         self.decoder.reset();
         self.decode_regs.borrow_mut().reset();
+    }
+
+    pub fn flush(&mut self) {
+        flush_pipeline_regs(&mut self.fetch_regs);
+        flush_pipeline_regs(&mut self.decode_regs);
     }
 }
 
 #[derive(Debug, Default)]
 struct FetchRegs {
     pub instr: Option<RawInstr>,
-    pub addr: Address,
+    pub pc: ProgramCounter,
 }
 
 #[derive(Debug, Default)]
 pub(super) struct DecodeRegs {
     pub instr: Option<Rc<dyn Instr>>,
-    pub addr: Address,
+    pub pc: ProgramCounter,
 }
