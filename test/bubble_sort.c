@@ -1,9 +1,5 @@
 // #include<stdio.h>
-
-__attribute__((noreturn)) static inline void exit(int code) {
-    asm volatile("ecall");
-    __builtin_unreachable();
-}
+#include "syscall.h"
 
 int test(int a, char b) {
     int c = a + b;

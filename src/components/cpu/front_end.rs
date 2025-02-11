@@ -1,7 +1,7 @@
 use self::decoder::Decoder;
 use super::circuit::{Circuit, ClockCycle};
 use super::error::{DecodeError, FetchError};
-use super::{make_pipeline_regs, PipelineRegs, ProgramCounter, Result};
+use super::{make_pipeline_regs, PipelineRegs, ProgramCounter};
 use crate::components::memory::{Address, Memory, MemoryAccess};
 use crate::components::Bus;
 use crate::instr::raw::RawInstr;
@@ -37,7 +37,7 @@ impl<'m> FrontEnd<'m> {
         &self.decode_regs
     }
 
-    pub fn fetch(&mut self, pc: &mut ProgramCounter) -> Result<FetchError> {
+    pub fn fetch(&mut self, pc: &mut ProgramCounter) -> Result<(), FetchError> {
         const ALIGN: usize = IALIGN / BITS_IN_BYTE;
 
         let addr = pc.read();
@@ -46,30 +46,30 @@ impl<'m> FrontEnd<'m> {
         }
         let bits = self.mem_bus.read(ClockCycle::Full).borrow().get(addr);
 
-        self.fetch_regs
-            .borrow_mut()
-            .write(ClockCycle::SecondHalf)
-            .instr = Some(RawInstr::new(bits));
+        *self.fetch_regs.borrow_mut().write(ClockCycle::SecondHalf) = FetchRegs {
+            instr: Some(RawInstr::new(bits)),
+            addr,
+        };
 
         pc.advance();
         Ok(())
     }
 
-    pub fn decode(&mut self) -> Result<DecodeError> {
+    pub fn decode(&mut self) -> Result<(), DecodeError> {
         let decoder = self.decoder.read(ClockCycle::FirstHalf);
-        let instr = self
-            .fetch_regs
-            .borrow()
-            .read(ClockCycle::FirstHalf)
+        let fetch_regs_circ = self.fetch_regs.borrow();
+        let fetch_regs = fetch_regs_circ.read(ClockCycle::FirstHalf);
+
+        let instr = fetch_regs
             .instr
             .as_ref()
             .map(|instr| decoder.decode(*instr))
             .transpose()?;
 
-        self.decode_regs
-            .borrow_mut()
-            .write(ClockCycle::SecondHalf)
-            .instr = instr;
+        *self.decode_regs.borrow_mut().write(ClockCycle::SecondHalf) = DecodeRegs {
+            instr,
+            addr: fetch_regs.addr,
+        };
 
         Ok(())
     }
@@ -89,9 +89,11 @@ impl<'m> FrontEnd<'m> {
 #[derive(Debug, Default)]
 struct FetchRegs {
     pub instr: Option<RawInstr>,
+    pub addr: Address,
 }
 
 #[derive(Debug, Default)]
 pub(super) struct DecodeRegs {
     pub instr: Option<Rc<dyn Instr>>,
+    pub addr: Address,
 }

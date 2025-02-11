@@ -5,7 +5,7 @@ use super::error::{ExecuteError, WritebackError};
 use super::front_end::DecodeRegs;
 use super::reg::arf::{ArchRegFile, ArchRegName};
 use super::reg::RegData;
-use super::{make_pipeline_regs, PipelineRegs, ProgramCounter, Result};
+use super::{make_pipeline_regs, PipelineRegs, ProgramCounter};
 use crate::components::memory::Address;
 use crate::instr::execute::ExecuteResult;
 use crate::instr::Instr;
@@ -14,6 +14,12 @@ use std::rc::Rc;
 
 pub mod agu;
 pub mod alu;
+
+pub(super) enum EnvTrap {
+    None,
+    Syscall(Address),
+    Break(Address),
+}
 
 pub(super) struct ExecutionEngine {
     // Execute
@@ -58,6 +64,10 @@ impl ExecutionEngine {
         }
     }
 
+    pub(super) unsafe fn int_reg_file(&mut self) -> &mut ArchRegFile {
+        self.int_reg_file.inner_mut()
+    }
+
     pub(super) fn alu_regs(&self) -> &PipelineRegs<AluRegs> {
         &self.alu_regs
     }
@@ -74,15 +84,19 @@ impl ExecutionEngine {
         &self.reg_file_write_regs
     }
 
-    pub fn execute(&mut self, pc: &mut ProgramCounter) -> Result<ExecuteError> {
+    pub fn execute(&mut self, pc: &mut ProgramCounter) -> Result<EnvTrap, ExecuteError> {
+        let mut trap = EnvTrap::None;
+
         let reg_file = self
             .reg_file_read_regs
             .borrow()
             .read(ClockCycle::FirstHalf)
             .0;
 
-        let decode_regs = self.decode_regs.borrow();
-        let instr = decode_regs.read(ClockCycle::FirstHalf).instr.as_ref();
+        let decode_regs_circ = self.decode_regs.borrow();
+        let decode_regs = decode_regs_circ.read(ClockCycle::FirstHalf);
+        let instr = decode_regs.instr.as_ref();
+        let addr = decode_regs.addr;
 
         // We can mark all those units as 'in use' since they are not shared between different stages of the pipeline.
 
@@ -103,7 +117,7 @@ impl ExecutionEngine {
 
         if let Some(instr) = instr {
             // TODO Move printing to diagnostics
-            println!("{:05x}    {:#}", pc.read(), instr);
+            println!("{:05x}    {:#}", addr, instr);
 
             match instr.execute(&reg_file, pc, alu, load_agu, store_agu)? {
                 ExecuteResult::Alu(dest, data) => {
@@ -119,6 +133,8 @@ impl ExecutionEngine {
                     let instr = Some(instr.clone());
                     *store_agu_regs = StoreAguRegs { instr, addr, data };
                 }
+                ExecuteResult::Ecall => trap = EnvTrap::Syscall(addr),
+                ExecuteResult::Ebreak => trap = EnvTrap::Break(addr),
             }
         }
 
@@ -127,10 +143,10 @@ impl ExecutionEngine {
             .write(ClockCycle::SecondHalf)
             .0 = *self.int_reg_file.read(ClockCycle::SecondHalf);
 
-        Ok(())
+        Ok(trap)
     }
 
-    pub fn writeback(&mut self) -> Result<WritebackError> {
+    pub fn writeback(&mut self) -> Result<(), WritebackError> {
         let write_regs = self.reg_file_write_regs.borrow_mut();
         let reg_file = self.int_reg_file.write(ClockCycle::FirstHalf);
         *reg_file = write_regs.read(ClockCycle::FirstHalf).0;

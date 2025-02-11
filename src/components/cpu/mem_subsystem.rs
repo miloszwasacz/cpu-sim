@@ -2,7 +2,7 @@ use super::circuit::{Circuit, ClockCycle};
 use super::error::MemAccessError;
 use super::exec_engine::{AluRegs, LoadAguRegs, RegFileRegs, StoreAguRegs};
 use super::reg::RegFile;
-use super::{PipelineRegs, Result};
+use super::PipelineRegs;
 use crate::components::memory::Memory;
 use crate::components::Bus;
 
@@ -37,7 +37,7 @@ impl<'m> MemorySubsystem<'m> {
         }
     }
 
-    pub fn memory_access(&mut self) -> Result<MemAccessError> {
+    pub fn memory_access(&mut self) -> Result<(), MemAccessError> {
         let alu_regs = self.alu_regs.borrow();
         let alu = alu_regs.read(ClockCycle::FirstHalf);
 

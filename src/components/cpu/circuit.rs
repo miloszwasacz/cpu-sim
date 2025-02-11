@@ -115,6 +115,10 @@ impl<T> Circuit<T> {
             self.write2 = Default::default();
         }
     }
+    
+    pub unsafe fn inner_mut(&mut self) -> &mut T {
+        &mut self.element
+    }
 }
 
 impl<T: Default> Default for Circuit<T> {

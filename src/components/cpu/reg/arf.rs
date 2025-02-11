@@ -47,6 +47,14 @@ pub struct ArchRegName(usize);
 
 impl ArchRegName {
     pub const ZERO: Self = Self(0);
+    pub const SYSCALL_CODE: Self = Self(17);
+    pub const A0: Self = Self(10);
+    pub const A1: Self = Self(11);
+    pub const A2: Self = Self(12);
+    pub const A3: Self = Self(13);
+    pub const A4: Self = Self(14);
+    pub const A5: Self = Self(15);
+    pub const A6: Self = Self(16);
 
     pub fn is_zero(&self) -> bool {
         self.0 == 0

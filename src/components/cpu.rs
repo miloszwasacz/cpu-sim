@@ -1,15 +1,17 @@
+use self::circuit::Circuit;
 pub use self::exec_engine::agu::Agu;
 pub use self::exec_engine::alu::Alu;
-use self::exec_engine::ExecutionEngine;
+use self::exec_engine::{EnvTrap, ExecutionEngine};
 use self::front_end::FrontEnd;
 use self::mem_subsystem::MemorySubsystem;
-use self::reg::{RegData, Register};
+use self::reg::arf::ArchRegName;
+use self::reg::{RegData, RegFile, Register};
 use super::memory::{Address, Memory};
 use super::Bus;
 use crate::instr::raw::RawInstrBits;
-use std::cell::RefCell;
+use crate::instr::SyscallCode;
 
-use crate::components::cpu::circuit::Circuit;
+use std::cell::RefCell;
 use std::error::Error;
 use std::rc::Rc;
 
@@ -20,7 +22,12 @@ mod front_end;
 mod mem_subsystem;
 pub mod reg;
 
-type Result<E> = std::result::Result<(), E>;
+pub type ExitCode = i32;
+
+pub enum CpuRun {
+    Exit(ExitCode),
+    Break,
+}
 
 // TODO Add diagnostics
 pub struct Cpu<'m> {
@@ -56,7 +63,7 @@ impl<'m> Cpu<'m> {
         self.pc.finish_cycle();
     }
 
-    pub fn run(&mut self) -> Result<Box<dyn Error>> {
+    pub fn run(&mut self) -> Result<CpuRun, Box<dyn Error>> {
         loop {
             // The order is reversed to mimic parallelism
 
@@ -69,7 +76,7 @@ impl<'m> Cpu<'m> {
             self.mem_subsystem.finish_memory_access_cycle();
 
             // println!("Execute");
-            self.exec_engine.execute(&mut self.pc).map_err(Box::new)?;
+            let trap = self.exec_engine.execute(&mut self.pc).map_err(Box::new)?;
             self.exec_engine.finish_execute_cycle();
 
             // println!("Decode");
@@ -81,7 +88,21 @@ impl<'m> Cpu<'m> {
             self.front_end.finish_fetch_cycle();
 
             // println!();
-            self.pc.finish_cycle();
+
+            match trap {
+                EnvTrap::None => self.pc.finish_cycle(),
+                EnvTrap::Syscall(pc) => {
+                    let exit_code = self.handle_syscall();
+                    self.save_pc(pc);
+                    if let Some(exit_code) = exit_code {
+                        return Ok(CpuRun::Exit(exit_code));
+                    }
+                }
+                EnvTrap::Break(pc) => {
+                    self.save_pc(pc);
+                    return Ok(CpuRun::Break);
+                }
+            }
         }
     }
 
@@ -95,6 +116,20 @@ impl<'m> Cpu<'m> {
     //
     //     Ok(())
     // }
+
+    fn save_pc(&mut self, pc: Address) {
+        self.pc.write(pc);
+        self.pc.advance();
+        self.pc.finish_cycle();
+    }
+
+    fn handle_syscall(&mut self) -> Option<ExitCode> {
+        let reg_file = unsafe { self.exec_engine.int_reg_file() };
+        let syscall = SyscallCode::try_from(reg_file.get(ArchRegName::SYSCALL_CODE).get()).unwrap();
+        match syscall {
+            SyscallCode::Exit => Some(reg_file.get(ArchRegName::A0).get()),
+        }
+    }
 }
 
 //#region PC

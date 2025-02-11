@@ -1,9 +1,7 @@
 use super::system_instr;
+use crate::instr::execute::ExecuteResult;
 
 system_instr!(Ecall);
 
-// TODO Properly implement `Execute` and `MemoryAccess` for `Ecall`
-impl_execute!(Ecall, |&self, _, _, _, _, _| {
-    todo!()
-});
+impl_execute!(Ecall, |&self, _, _, _, _, _| { Ok(ExecuteResult::Ecall) });
 impl_mem_access!(Ecall);

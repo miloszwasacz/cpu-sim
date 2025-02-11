@@ -21,4 +21,6 @@ pub enum ExecuteResult {
     Branch,
     LoadAgu(ArchRegName, Address),
     StoreAgu(Address, RegData),
+    Ecall,
+    Ebreak,
 }
