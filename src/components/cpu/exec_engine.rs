@@ -2,7 +2,7 @@ use self::agu::Agu;
 use self::alu::Alu;
 use super::circuit::{Circuit, ClockCycle};
 use super::error::{ExecuteError, WritebackError};
-use super::front_end::DecodeRegs;
+use super::front_end::{DecodeOption, DecodeRegs};
 use super::reg::arf::{ArchRegFile, ArchRegName};
 use super::reg::RegData;
 use super::{flush_pipeline_regs, make_pipeline_regs, PipelineRegs, ProgramCounter};
@@ -74,6 +74,7 @@ impl ExecutionEngine {
             .read(ClockCycle::FirstHalf)
             .instr
             .as_ref()
+            .into_option()
             .and_then(|instr| instr.write_reg())
     }
 
@@ -99,8 +100,6 @@ impl ExecutionEngine {
     }
 
     pub fn execute(&mut self) -> Result<EnvTrap, ExecuteError> {
-        let mut trap = EnvTrap::None;
-
         let reg_file = self
             .reg_file_read_regs
             .borrow()
@@ -119,11 +118,18 @@ impl ExecutionEngine {
 
         let mut execute_regs_circ = self.execute_regs.borrow_mut();
         let execute_regs = execute_regs_circ.write(ClockCycle::SecondHalf);
-        *execute_regs = Default::default();
+        *execute_regs = ExecuteRegs {
+            pc,
+            instr: decode_regs.instr.clone(),
+            ..Default::default()
+        };
 
-        if let Some(instr) = instr {
-            execute_regs.pc = pc;
-            execute_regs.instr = Some(instr.clone());
+        self.reg_file_read_regs
+            .borrow_mut()
+            .write(ClockCycle::SecondHalf)
+            .0 = *self.int_reg_file.read(ClockCycle::SecondHalf);
+
+        if let DecodeOption::Some(instr) = instr {
             match instr.execute(&reg_file, pc, alu, load_agu, store_agu)? {
                 ExecuteResult::Alu(dest, data) => {
                     execute_regs.alu = Some(AluRegs { dest, data });
@@ -143,17 +149,11 @@ impl ExecutionEngine {
                 ExecuteResult::StoreAgu(addr, data) => {
                     execute_regs.store_agu = Some(StoreAguRegs { addr, data });
                 }
-                ExecuteResult::Ecall => trap = EnvTrap::Syscall(pc),
-                ExecuteResult::Ebreak => trap = EnvTrap::Break(pc),
+                ExecuteResult::Ecall => return Ok(EnvTrap::Syscall(pc)),
+                ExecuteResult::Ebreak => return Ok(EnvTrap::Break(pc)),
             }
         }
-
-        self.reg_file_read_regs
-            .borrow_mut()
-            .write(ClockCycle::SecondHalf)
-            .0 = *self.int_reg_file.read(ClockCycle::SecondHalf);
-
-        Ok(trap)
+        Ok(EnvTrap::None)
     }
 
     pub fn writeback(&mut self) -> Result<(), WritebackError> {
@@ -193,7 +193,7 @@ impl ExecutionEngine {
 #[derive(Debug, Default)]
 pub(super) struct ExecuteRegs {
     pub pc: ProgramCounter,
-    pub instr: Option<Rc<dyn Instr>>,
+    pub instr: DecodeOption<Rc<dyn Instr>>,
     pub alu: Option<AluRegs>,
     pub load_agu: Option<LoadAguRegs>,
     pub store_agu: Option<StoreAguRegs>,

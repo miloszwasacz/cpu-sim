@@ -10,6 +10,7 @@ use super::memory::{Address, Memory};
 use super::Bus;
 use crate::instr::raw::RawInstrBits;
 use crate::instr::SyscallCode;
+use crate::os::Os;
 
 use std::cell::RefCell;
 use std::error::Error;
@@ -32,6 +33,7 @@ pub enum CpuRun {
 
 // TODO Add diagnostics
 pub struct Cpu<'m> {
+    os: Os,
     pc: ProgramCounter,
     front_end: FrontEnd<'m>,
     exec_engine: ExecutionEngine,
@@ -40,6 +42,7 @@ pub struct Cpu<'m> {
 
 impl<'m> Cpu<'m> {
     pub fn new(mem_bus: Bus<'m, Memory>) -> Self {
+        let os = Default::default();
         let pc = Default::default();
         let front_end = FrontEnd::new(mem_bus);
         let exec_engine = ExecutionEngine::new(front_end.decode_regs());
@@ -51,11 +54,16 @@ impl<'m> Cpu<'m> {
         );
 
         Self {
+            os,
             pc,
             front_end,
             exec_engine,
             mem_subsystem,
         }
+    }
+    
+    pub(crate) fn os(&mut self) -> &mut Os {
+        &mut self.os
     }
 
     pub(crate) fn set_entrypoint(&mut self, entrypoint: Address) {
@@ -91,7 +99,7 @@ impl<'m> Cpu<'m> {
 
         // println!("Memory Access");
         let ex_mem_write_reg = self.mem_subsystem.ex_mem_write_reg();
-        let jump_target = self.mem_subsystem.memory_access().map_err(Box::new)?;
+        let jump_target = self.mem_subsystem.memory_access()?;
 
         // println!("Execute");
         let id_ex_write_reg = self.exec_engine.id_ex_write_reg();
@@ -112,7 +120,6 @@ impl<'m> Cpu<'m> {
         self.exec_engine.finish_execute_cycle();
         self.front_end.finish_decode_cycle();
         self.front_end.finish_fetch_cycle();
-        self.pc.finish_cycle();
 
         if let Some(jump_target) = jump_target {
             self.pc.write(jump_target);
@@ -120,6 +127,7 @@ impl<'m> Cpu<'m> {
             self.front_end.flush();
         }
 
+        self.pc.finish_cycle();
         Ok(trap)
     }
 
@@ -130,12 +138,58 @@ impl<'m> Cpu<'m> {
     }
 
     fn handle_syscall(&mut self) -> Option<ExitCode> {
-        let reg_file = unsafe { self.exec_engine.int_reg_file() };
-        // TODO Log unknown syscalls
-        let syscall = SyscallCode::try_from(reg_file.get(ArchRegName::SYSCALL_CODE).get()).ok()?;
-        match syscall {
-            SyscallCode::Exit => Some(reg_file.get(ArchRegName::A0).get()),
+        macro_rules! os_call {
+            ($os:expr, $mem:expr, |os| os.$( $call:tt )+) => {
+                match $os.$( $call )+ {
+                    Ok(r) => r,
+                    Err((r, errno)) => {
+                        $os.set_errno($mem, errno);
+                        r
+                    }
+                }
+            };
         }
+        
+        let reg_file = unsafe { self.exec_engine.int_reg_file() };
+        let mem = unsafe { &mut self.mem_subsystem.mem() };
+        // TODO Log unknown syscalls instead of panicking
+        let syscall = SyscallCode::try_from(reg_file.get(ArchRegName::SYSCALL_CODE).get()).unwrap();
+        match syscall {
+            // TODO Refactor exiting -- on ECALL, mark as ready to exit, and stop only when there is a jump to itself
+            SyscallCode::Exit => return Some(reg_file.get(ArchRegName::A0).get()),
+            SyscallCode::Close => {
+                let fd = reg_file.get(ArchRegName::A0).get();
+                let result = os_call!(self.os, mem, |os| os.close(fd));
+                reg_file.set(ArchRegName::A0, result);
+            }
+            SyscallCode::Lseek => {
+                let fd = reg_file.get(ArchRegName::A0).get();
+                let offset = reg_file.get(ArchRegName::A1).get();
+                let whence = reg_file.get(ArchRegName::A2).get();
+                let result = os_call!(self.os, mem, |os| os.lseek(fd, offset, whence));
+                reg_file.set(ArchRegName::A2, result);
+            }
+            SyscallCode::Read => {
+                let fd = reg_file.get(ArchRegName::A0).get();
+                let buf = reg_file.get(ArchRegName::A1).get() as Address;
+                let count = reg_file.get(ArchRegName::A2).get_unsigned();
+                let result = os_call!(self.os, mem, |os| os.read(mem, fd, buf, count));
+                reg_file.set(ArchRegName::A0, result);
+            }
+            SyscallCode::Sbrk => {
+                let incr = reg_file.get(ArchRegName::A0).get();
+                let result = os_call!(self.os, mem, |os| os.sbrk(incr));
+                reg_file.set(ArchRegName::A0, result);
+            }
+            SyscallCode::Write => {
+                let fd = reg_file.get(ArchRegName::A0).get();
+                let buf = reg_file.get(ArchRegName::A1).get() as Address;
+                let count = reg_file.get(ArchRegName::A2).get_unsigned();
+                let result = os_call!(self.os, mem, |os| os.write(mem, fd, buf, count));
+                reg_file.set(ArchRegName::A0, result);
+            }
+        }
+        None
     }
 }
 

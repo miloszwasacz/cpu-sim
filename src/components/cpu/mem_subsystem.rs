@@ -1,11 +1,15 @@
 use super::circuit::{Circuit, ClockCycle};
-use super::error::MemAccessError;
+use super::error::DecodeError;
 use super::exec_engine::{ExecuteRegs, RegFileRegs, WritebackRegs};
+use super::front_end::DecodeOption;
 use super::reg::arf::ArchRegName;
 use super::reg::RegFile;
 use super::PipelineRegs;
 use crate::components::memory::{Address, Memory};
 use crate::components::Bus;
+
+use std::cell::RefMut;
+use std::error::Error;
 
 pub struct MemorySubsystem<'m> {
     execute_regs: PipelineRegs<ExecuteRegs>,
@@ -34,16 +38,21 @@ impl<'m> MemorySubsystem<'m> {
         }
     }
 
+    pub(super) unsafe fn mem(&mut self) -> RefMut<'_, Memory> {
+        self.mem_bus.inner_mut().borrow_mut()
+    }
+
     pub(super) fn ex_mem_write_reg(&self) -> Option<ArchRegName> {
         self.execute_regs
             .borrow()
             .read(ClockCycle::FirstHalf)
             .instr
             .as_ref()
+            .into_option()
             .and_then(|instr| instr.write_reg())
     }
 
-    pub fn memory_access(&mut self) -> Result<Option<Address>, MemAccessError> {
+    pub fn memory_access(&mut self) -> Result<Option<Address>, Box<dyn Error>> {
         let execute_regs_circ = self.execute_regs.borrow();
         let execute_regs = execute_regs_circ.read(ClockCycle::FirstHalf);
 
@@ -54,29 +63,29 @@ impl<'m> MemorySubsystem<'m> {
         let reg_file_regs = &mut reg_file_regs_circ.write(ClockCycle::SecondHalf).0;
 
         *writeback_regs = WritebackRegs {
-            instr: execute_regs.instr.clone(),
+            instr: execute_regs.instr.clone().into_option(),
             pc: execute_regs.pc,
         };
-        if let Some(alu) = &execute_regs.alu {
-            reg_file_regs.set(alu.dest, alu.data);
-        }
-        if let Some(load_agu) = &execute_regs.load_agu {
-            let mem = self.mem_bus.read(ClockCycle::Full).borrow();
-            let data = execute_regs
-                .instr
-                .as_ref()
-                .unwrap()
-                .load(&mem, load_agu.addr)?;
-            reg_file_regs.set(load_agu.dest, data);
-        }
-        if let Some(store_agu) = &execute_regs.store_agu {
-            let mut mem = self.mem_bus.write(ClockCycle::FirstHalf).borrow_mut();
-            execute_regs
-                .instr
-                .as_ref()
-                .unwrap()
-                .store(&mut mem, store_agu.addr, store_agu.data)?;
-        }
+        match execute_regs.instr.as_ref() {
+            DecodeOption::Some(instr) => {
+                if let Some(alu) = &execute_regs.alu {
+                    reg_file_regs.set(alu.dest, alu.data);
+                }
+                if let Some(load_agu) = &execute_regs.load_agu {
+                    let mem = self.mem_bus.read(ClockCycle::Full).borrow();
+                    let data = instr.load(&mem, load_agu.addr)?;
+                    reg_file_regs.set(load_agu.dest, data);
+                }
+                if let Some(store_agu) = &execute_regs.store_agu {
+                    let mut mem = self.mem_bus.write(ClockCycle::FirstHalf).borrow_mut();
+                    instr.store(&mut mem, store_agu.addr, store_agu.data)?;
+                }
+            }
+            DecodeOption::InvalidInstr(instr) => {
+                return Err(Box::new(DecodeError::InvalidInstruction(instr)));
+            }
+            DecodeOption::None => {}
+        };
 
         Ok(execute_regs.branch)
     }

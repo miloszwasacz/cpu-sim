@@ -1,5 +1,4 @@
 // #include<stdio.h>
-#include "syscall.h"
 
 int test(int a, char b) {
     int c = a + b;
@@ -7,7 +6,7 @@ int test(int a, char b) {
 }
 
 int main() {
-    int arr[10] = {3,2,4,1,9,7,8,10,5,6};
+    int arr[10] = {3,2,4,1,9,7,8,0,5,6};
 
     volatile int brr[4] = {1,2,3,4};
     
@@ -26,7 +25,13 @@ int main() {
         }
         n--;
     }
-    exit(arr[0] + d);
 
-    // printf("%d", arr[0]);
+    char chars[22];
+    chars[0] = '['; chars[20] = ']'; chars[21] = '\n';
+    for (int i = 0; i < 10; i++)
+        chars[i * 2 + 1] = arr[i] + '0';
+    for (int i = 2; i < 20; i += 2)
+        chars[i] = ',';
+        
+    _write(1, chars, 22);
 }

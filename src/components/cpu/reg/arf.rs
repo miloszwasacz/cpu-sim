@@ -39,6 +39,17 @@ impl RegFile for ArchRegFile {
     }
 }
 
+impl fmt::Display for ArchRegFile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Registers:")?;
+        for (name, reg) in self.0.iter().enumerate() {
+            let name: ArchRegName = name.try_into().unwrap();
+            writeln!(f, "  {:#}: {}", name, reg.get())?;
+        }
+        Ok(())
+    }
+}
+
 //#endregion
 
 //#region Register Name

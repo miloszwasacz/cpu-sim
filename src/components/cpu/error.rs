@@ -16,7 +16,7 @@ pub enum FetchError {
 impl fmt::Display for FetchError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FetchError::InstructionAddressMisaligned(addr) => {
+            Self::InstructionAddressMisaligned(addr) => {
                 write!(
                     f,
                     "instruction-address-misaligned exception: {addr:#0width$x}",
@@ -79,8 +79,8 @@ impl fmt::Display for MemAccessError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "invalid memory access: ")?;
         match self {
-            MemAccessError::InvalidLoad => write!(f, "instruction is not a load"),
-            MemAccessError::InvalidStore => write!(f, "instruction is not a store"),
+            Self::InvalidLoad => write!(f, "instruction is not a load"),
+            Self::InvalidStore => write!(f, "instruction is not a store"),
         }
     }
 }

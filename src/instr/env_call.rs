@@ -50,28 +50,46 @@ use system_instr;
 
 //#region Syscall
 
+macro_rules! from_into_syscall {
+    ($( $code:path => $n:literal, )*) => {
+        impl From<SyscallCode> for u32 {
+            fn from(value: SyscallCode) -> Self {
+                match value {
+                    $( $code => $n, )*
+                }
+            }
+        }
+
+        impl TryFrom<u32> for SyscallCode {
+            type Error = SyscallConversionError;
+        
+            fn try_from(value: u32) -> Result<Self, Self::Error> {
+                match value {
+                    $( $n => Ok($code), )*
+                    code => Err(SyscallConversionError(code)),
+                }
+            }
+        }
+    };
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SyscallCode {
     Exit,
+    Close,
+    Lseek,
+    Read,
+    Sbrk,
+    Write,
 }
 
-impl From<SyscallCode> for u32 {
-    fn from(value: SyscallCode) -> Self {
-        match value {
-            SyscallCode::Exit => 93,
-        }
-    }
-}
-
-impl TryFrom<u32> for SyscallCode {
-    type Error = SyscallConversionError;
-
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
-        match value {
-            93 => Ok(SyscallCode::Exit),
-            code => Err(SyscallConversionError(code)),
-        }
-    }
+from_into_syscall! {
+    SyscallCode::Exit => 93,
+    SyscallCode::Close => 57,
+    SyscallCode::Lseek => 62,
+    SyscallCode::Read => 63,
+    SyscallCode::Sbrk => 214,
+    SyscallCode::Write => 64,
 }
 
 impl TryFrom<RegData> for SyscallCode {

@@ -75,10 +75,11 @@ impl<'m> FrontEnd<'m> {
             .instr
             .as_ref()
             .map(|instr| decoder.decode(*instr))
-            .transpose()?;
+            .unwrap_or(DecodeOption::None);
 
         let stall = instr
             .as_ref()
+            .into_option()
             .map(|instr| {
                 let read_regs = instr.read_regs();
                 [id_ex_write_reg, ex_mem_write_reg, mem_wb_write_reg]
@@ -89,7 +90,11 @@ impl<'m> FrontEnd<'m> {
             .unwrap_or_default();
 
         *self.decode_regs.borrow_mut().write(ClockCycle::SecondHalf) = DecodeRegs {
-            instr: if stall { Some(nop()) } else { instr },
+            instr: if stall {
+                DecodeOption::Some(nop())
+            } else {
+                instr
+            },
             pc: fetch_regs.pc,
         };
 
@@ -120,6 +125,50 @@ struct FetchRegs {
 
 #[derive(Debug, Default)]
 pub(super) struct DecodeRegs {
-    pub instr: Option<Rc<dyn Instr>>,
+    pub instr: DecodeOption<Rc<dyn Instr>>,
     pub pc: ProgramCounter,
 }
+
+//#region DecodeOption
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub(super) enum DecodeOption<T> {
+    #[default]
+    None,
+    InvalidInstr(RawInstr),
+    Some(T),
+}
+
+impl<T> DecodeOption<T> {
+    pub const fn as_ref(&self) -> DecodeOption<&T> {
+        match self {
+            Self::None => DecodeOption::None,
+            Self::InvalidInstr(instr) => DecodeOption::InvalidInstr(*instr),
+            Self::Some(val) => DecodeOption::Some(val),
+        }
+    }
+
+    pub fn into_option(self) -> Option<T> {
+        Option::from(self)
+    }
+}
+
+impl<T> From<Option<T>> for DecodeOption<T> {
+    fn from(value: Option<T>) -> Self {
+        match value {
+            None => Self::None,
+            Some(value) => Self::Some(value),
+        }
+    }
+}
+
+impl<T> From<DecodeOption<T>> for Option<T> {
+    fn from(value: DecodeOption<T>) -> Self {
+        match value {
+            DecodeOption::None | DecodeOption::InvalidInstr(_) => None,
+            DecodeOption::Some(value) => Some(value),
+        }
+    }
+}
+
+//#endregion

@@ -11,7 +11,7 @@ pub type Address = u32;
 pub struct Memory(Box<[u8]>);
 
 impl Memory {
-    const SIZE: usize = MemSize(4).GiB();
+    const SIZE: usize = MemSize(8).GiB();
     
     pub fn new() -> Self {
         Memory(vec![0; Self::SIZE].into_boxed_slice())
