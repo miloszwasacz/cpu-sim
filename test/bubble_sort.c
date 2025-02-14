@@ -1,16 +1,7 @@
 // #include<stdio.h>
 
-int test(int a, char b) {
-    int c = a + b;
-    return c;
-}
-
 int main() {
     int arr[10] = {3,2,4,1,9,7,8,0,5,6};
-
-    volatile int brr[4] = {1,2,3,4};
-    
-    int d = test(brr[1], brr[2]);
     int n = 10;
     while (n > 1)
     {
@@ -26,12 +17,13 @@ int main() {
         n--;
     }
 
-    char chars[22];
-    chars[0] = '['; chars[20] = ']'; chars[21] = '\n';
+    const int LEN = 23;
+    char chars[LEN];
+    chars[0] = '['; chars[LEN - 3] = ']'; chars[LEN - 2] = '\n'; chars[LEN - 1] = '\0';
     for (int i = 0; i < 10; i++)
         chars[i * 2 + 1] = arr[i] + '0';
-    for (int i = 2; i < 20; i += 2)
+    for (int i = 2; i < LEN - 3; i += 2)
         chars[i] = ',';
         
-    _write(1, chars, 22);
+    _write(1, chars, LEN);
 }

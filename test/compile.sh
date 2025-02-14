@@ -13,6 +13,7 @@ BIN="$DIR/$FILENAME.bin"
 
 echo "Compiling $FILE..."
 # To see the linker script, add the `-Wl,--verbose` option
-riscv64-unknown-elf-gcc -mabi=ilp32 -march=rv32i -no-pie -nostdlib -e main -O1 -o "$BIN" "$FILE_PATH"
+riscv64-unknown-elf-gcc -mabi=ilp32 -march=rv32i -no-pie -O1 -o "$BIN" "$FILE_PATH"
+#riscv64-unknown-elf-gcc -mabi=ilp32 -march=rv32i -no-pie -nostdlib -e main -O1 -o "$BIN" "$FILE_PATH"
 
 echo "Done"
