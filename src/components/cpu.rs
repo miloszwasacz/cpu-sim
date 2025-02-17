@@ -61,7 +61,7 @@ impl<'m> Cpu<'m> {
             mem_subsystem,
         }
     }
-    
+
     pub(crate) fn os(&mut self) -> &mut Os {
         &mut self.os
     }
@@ -149,11 +149,11 @@ impl<'m> Cpu<'m> {
                 }
             };
         }
-        
+
         let reg_file = unsafe { self.exec_engine.int_reg_file() };
         let mem = unsafe { &mut self.mem_subsystem.mem() };
         // TODO Log unknown syscalls instead of panicking
-        let syscall = SyscallCode::try_from(reg_file.get(ArchRegName::SYSCALL_CODE).get()).unwrap();
+        let syscall = SyscallCode::try_from(reg_file.get(ArchRegName::A7).get()).unwrap();
         match syscall {
             // TODO Refactor exiting -- on ECALL, mark as ready to exit, and stop only when there is a jump to itself
             SyscallCode::Exit => return Some(reg_file.get(ArchRegName::A0).get()),
@@ -162,12 +162,18 @@ impl<'m> Cpu<'m> {
                 let result = os_call!(self.os, mem, |os| os.close(fd));
                 reg_file.set(ArchRegName::A0, result);
             }
+            SyscallCode::Fstat => {
+                let fd = reg_file.get(ArchRegName::A0).get();
+                let statbuf = reg_file.get(ArchRegName::A1).get_unsigned();
+                let result = os_call!(self.os, mem, |os| os.fstat(mem, fd, statbuf));
+                reg_file.set(ArchRegName::A0, result);
+            }
             SyscallCode::Lseek => {
                 let fd = reg_file.get(ArchRegName::A0).get();
                 let offset = reg_file.get(ArchRegName::A1).get();
                 let whence = reg_file.get(ArchRegName::A2).get();
                 let result = os_call!(self.os, mem, |os| os.lseek(fd, offset, whence));
-                reg_file.set(ArchRegName::A2, result);
+                reg_file.set(ArchRegName::A0, result);
             }
             SyscallCode::Read => {
                 let fd = reg_file.get(ArchRegName::A0).get();
@@ -178,12 +184,13 @@ impl<'m> Cpu<'m> {
             }
             SyscallCode::Sbrk => {
                 let incr = reg_file.get(ArchRegName::A0).get();
-                let result = os_call!(self.os, mem, |os| os.sbrk(incr));
+                let sp = reg_file.get(ArchRegName::SP).get_unsigned();
+                let result = os_call!(self.os, mem, |os| os.sbrk(sp, incr));
                 reg_file.set(ArchRegName::A0, result);
             }
             SyscallCode::Write => {
                 let fd = reg_file.get(ArchRegName::A0).get();
-                let buf = reg_file.get(ArchRegName::A1).get() as Address;
+                let buf = reg_file.get(ArchRegName::A1).get_unsigned();
                 let count = reg_file.get(ArchRegName::A2).get_unsigned();
                 let result = os_call!(self.os, mem, |os| os.write(mem, fd, buf, count));
                 reg_file.set(ArchRegName::A0, result);

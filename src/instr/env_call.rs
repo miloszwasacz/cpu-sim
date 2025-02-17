@@ -77,6 +77,7 @@ macro_rules! from_into_syscall {
 pub enum SyscallCode {
     Exit,
     Close,
+    Fstat,
     Lseek,
     Read,
     Sbrk,
@@ -86,6 +87,7 @@ pub enum SyscallCode {
 from_into_syscall! {
     SyscallCode::Exit => 93,
     SyscallCode::Close => 57,
+    SyscallCode::Fstat => 80,
     SyscallCode::Lseek => 62,
     SyscallCode::Read => 63,
     SyscallCode::Sbrk => 214,

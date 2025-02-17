@@ -1,9 +1,9 @@
 use super::{RegData, RegFile, Register, ARCH_REG_COUNT};
 use crate::instr::raw::{Bits, REG_LEN};
 
+use cpu_sim_derive::register_names;
 use std::error::Error;
 use std::fmt;
-
 //#region Register File
 
 #[derive(Debug, Clone, Copy)]
@@ -57,19 +57,71 @@ impl fmt::Display for ArchRegFile {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct ArchRegName(usize);
 
-impl ArchRegName {
-    pub const ZERO: Self = Self(0);
-    pub const SYSCALL_CODE: Self = Self(17);
-    pub const A0: Self = Self(10);
-    pub const A1: Self = Self(11);
-    pub const A2: Self = Self(12);
-    pub const A3: Self = Self(13);
-    pub const A4: Self = Self(14);
-    pub const A5: Self = Self(15);
-    pub const A6: Self = Self(16);
+register_names!(ArchRegName {
+    // Always zero
+    reg ZERO = 0,
 
-    pub fn is_zero(&self) -> bool {
-        self.0 == 0
+    // Return address
+    reg RA = 1,
+
+    // Stack pointer
+    reg SP = 2,
+
+    // Global pointer
+    reg GP = 3,
+
+    // Thread pointer
+    reg TP = 4,
+
+    // Temporary / alternate return address
+    reg T0 = 5,
+
+    // Temporaries
+    reg T1 = 6,
+    reg T2 = 7,
+
+    // Saved register / frame pointer
+    reg S0 = 8,
+
+    // Saved register
+    reg S1 = 9,
+
+    // Function arguments / return values
+    reg A0 = 10,
+    reg A1 = 11,
+
+    // Function arguments
+    reg A2 = 12,
+    reg A3 = 13,
+    reg A4 = 14,
+    reg A5 = 15,
+    reg A6 = 16,
+    reg A7 = 17,
+
+    // Saved registers
+    reg S2 = 18,
+    reg S3 = 19,
+    reg S4 = 20,
+    reg S5 = 21,
+    reg S6 = 22,
+    reg S7 = 23,
+    reg S8 = 24,
+    reg S9 = 25,
+    reg S10 = 26,
+    reg S11 = 27,
+
+    // Temporaries
+    reg T3 = 28,
+    reg T4 = 29,
+    reg T5 = 30,
+    reg T6 = 31,
+});
+
+impl ArchRegName {
+    pub const FP: Self = Self::S0;
+
+    pub const fn is_zero(&self) -> bool {
+        self.0 == Self::ZERO.0
     }
 }
 
@@ -96,77 +148,6 @@ impl TryFrom<usize> for ArchRegName {
         } else {
             Err(ArchRegNameConvertError(value))
         }
-    }
-}
-
-impl fmt::Display for ArchRegName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let width = if f.alternate() { 4 } else { 0 };
-        write!(
-            f,
-            "{:>width$}",
-            match self.0 {
-                // Always zero
-                0 => "zero",
-
-                // Return address
-                1 => "ra",
-
-                // Stack pointer
-                2 => "sp",
-
-                // Global pointer
-                3 => "gp",
-
-                // Thread pointer
-                4 => "tp",
-
-                // Temporary / alternate return address
-                5 => "t0",
-
-                // Temporaries
-                6 => "t1",
-                7 => "t2",
-
-                // Saved register / frame pointer
-                8 => "s0",
-
-                // Saved register
-                9 => "s1",
-
-                // Function arguments / return values
-                10 => "a0",
-                11 => "a1",
-
-                // Function arguments
-                12 => "a2",
-                13 => "a3",
-                14 => "a4",
-                15 => "a5",
-                16 => "a6",
-                17 => "a7",
-
-                // Saved registers
-                18 => "s2",
-                19 => "s3",
-                20 => "s4",
-                21 => "s5",
-                22 => "s6",
-                23 => "s7",
-                24 => "s8",
-                25 => "s9",
-                26 => "s10",
-                27 => "s11",
-
-                // Temporaries
-                28 => "t3",
-                29 => "t4",
-                30 => "t5",
-                31 => "t6",
-
-                _ => unreachable!(),
-            }
-        )
     }
 }
 

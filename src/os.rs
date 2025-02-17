@@ -11,7 +11,7 @@ mod loader;
 
 macro_rules! assert_fd_valid {
     ($fd:expr) => {
-        if $fd < 0 { 
+        if $fd < 0 {
             return Err((-1, errno::EBADF));
         }
     };
@@ -58,7 +58,7 @@ impl Os {
         if matches!(file, 0..=2) {
             return Err((-1, errno::EBADF));
         }
-        
+
         self.file_table
             .get_mut(file as usize)
             .and_then(Option::take)
@@ -76,6 +76,28 @@ impl Os {
                     },
                 )
             })
+    }
+
+    pub fn fstat(&mut self, mem: &mut Memory, file: Fd, statbuf: Address) -> Result {
+        assert_fd_valid!(file);
+        let is_open = |file| {
+            self.file_table
+                .get(file as usize)
+                .map(Option::is_some)
+                .unwrap_or(false)
+        };
+
+        if file <= 2 || is_open(file) {
+            let bytes = &mut mem[statbuf..statbuf + size_of::<libc::stat>() as Address];
+            let ptr = bytes.as_mut_ptr() as *mut libc::stat;
+            let mut st = unsafe { std::ptr::read(ptr) };
+            st.st_mode = libc::S_IFCHR as _;
+            unsafe { std::ptr::write(ptr, st) };
+
+            Ok(0)
+        } else {
+            Err((-1, errno::EBADF))
+        }
     }
 
     pub fn lseek(&mut self, file: Fd, offset: i32, whence: i32) -> Result {
@@ -110,7 +132,13 @@ impl Os {
             })
     }
 
-    pub fn read(&mut self, mem: &mut Memory, file: Fd, buf: Address, count: RegDataUnsigned) -> Result {
+    pub fn read(
+        &mut self,
+        mem: &mut Memory,
+        file: Fd,
+        buf: Address,
+        count: RegDataUnsigned,
+    ) -> Result {
         assert_fd_valid!(file);
         let buf = &mut mem[buf..buf + count];
         match file {
@@ -139,24 +167,33 @@ impl Os {
         })
     }
 
-    pub fn sbrk(&mut self, incr: i32) -> Result {
+    pub fn sbrk(&mut self, stack_ptr: Address, incr: i32) -> Result {
         if self.heap_end == 0 {
             self.heap_end = self._end_addr;
         }
 
         let prev_heap_end = self.heap_end;
-        self.heap_end += incr as Address;
-        if self.heap_end > self._end_addr {
+        self.heap_end = (self.heap_end as i32 + incr) as _;
+        if self.heap_end > stack_ptr {
             // TODO Move printing to diagnostics
-            eprintln!("Heap and stack collision");
+            eprintln!(
+                "Heap and stack collision: {:05x}, {:05x}",
+                self.heap_end, stack_ptr
+            );
             return Err((-1, errno::ENOMEM));
         }
 
         Ok(prev_heap_end as _)
     }
 
-    pub fn write(&mut self, mem: &Memory, file: Fd, buf: Address, count: RegDataUnsigned) -> Result {
-        assert_fd_valid!(file);        
+    pub fn write(
+        &mut self,
+        mem: &Memory,
+        file: Fd,
+        buf: Address,
+        count: RegDataUnsigned,
+    ) -> Result {
+        assert_fd_valid!(file);
         let buf = &mem[buf..buf + count];
         match file {
             0 => return Err((-1, errno::EBADF)),

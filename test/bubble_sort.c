@@ -1,4 +1,4 @@
-// #include<stdio.h>
+#include "simpleio.h"
 
 int main() {
     int arr[10] = {3,2,4,1,9,7,8,0,5,6};
@@ -17,13 +17,11 @@ int main() {
         n--;
     }
 
-    const int LEN = 23;
-    char chars[LEN];
-    chars[0] = '['; chars[LEN - 3] = ']'; chars[LEN - 2] = '\n'; chars[LEN - 1] = '\0';
-    for (int i = 0; i < 10; i++)
-        chars[i * 2 + 1] = arr[i] + '0';
-    for (int i = 2; i < LEN - 3; i += 2)
-        chars[i] = ',';
-        
-    _write(1, chars, LEN);
+    putchar('[');
+    putchar(arr[0] + '0');
+    for (int i = 1; i < 10; i++) {
+        fputs(", ", STDOUT);
+        putchar(arr[i] + '0');
+    }
+    puts("]");
 }
