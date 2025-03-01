@@ -4,6 +4,7 @@ use crate::instr::raw::{Bits, REG_LEN};
 use cpu_sim_derive::register_names;
 use std::error::Error;
 use std::fmt;
+
 //#region Register File
 
 #[derive(Debug, Clone, Copy)]
@@ -26,8 +27,8 @@ impl Default for ArchRegFile {
 impl RegFile for ArchRegFile {
     type Index = ArchRegName;
 
-    fn get(&self, reg: Self::Index) -> &Register {
-        &self.0[reg.0]
+    fn get(&self, reg: Self::Index) -> RegData {
+        self.0[reg.0].get()
     }
 
     fn set(&mut self, reg: Self::Index, data: RegData) {
@@ -43,8 +44,14 @@ impl fmt::Display for ArchRegFile {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Registers:")?;
         for (name, reg) in self.0.iter().enumerate() {
+            const HEX_WIDTH: usize = size_of::<RegData>() * 2;
             let name: ArchRegName = name.try_into().unwrap();
-            writeln!(f, "  {:#}: {}", name, reg.get())?;
+            let data = reg.get().i();
+            writeln!(
+                f,
+                "  {name:#}: {data} ({data:#0width$x})",
+                width = HEX_WIDTH
+            )?;
         }
         Ok(())
     }
@@ -54,7 +61,7 @@ impl fmt::Display for ArchRegFile {
 
 //#region Register Name
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ArchRegName(usize);
 
 register_names!(ArchRegName {
@@ -122,6 +129,12 @@ impl ArchRegName {
 
     pub const fn is_zero(&self) -> bool {
         self.0 == Self::ZERO.0
+    }
+}
+
+impl Default for ArchRegName {
+    fn default() -> Self {
+        Self::ZERO
     }
 }
 

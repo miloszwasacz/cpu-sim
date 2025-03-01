@@ -1,66 +1,50 @@
-use crate::components::cpu::reg::{RegData, RegDataUnsigned};
+use crate::components::cpu::reg::RegData;
 
-pub struct Alu(());
+pub(super) struct Alu(());
 
 impl Alu {
-    const SHIFT_MASK: RegData = 0b11111;
+    const SHIFT_MASK: u32 = 0b11111;
 
-    pub(super) fn new() -> Self {
+    pub fn new() -> Self {
         Self(())
     }
 
-    pub fn add(&self, a: RegData, b: RegData) -> RegData {
-        a.wrapping_add(b)
-    }
-
-    pub fn sub(&self, a: RegData, b: RegData) -> RegData {
-        a.wrapping_sub(b)
-    }
-
-    pub fn and(&self, a: RegData, b: RegData) -> RegData {
-        a & b
-    }
-
-    pub fn or(&self, a: RegData, b: RegData) -> RegData {
-        a | b
-    }
-
-    pub fn xor(&self, a: RegData, b: RegData) -> RegData {
-        a ^ b
-    }
-
-    pub fn sll(&self, a: RegData, b: RegData) -> RegData {
-        let sh = b & Self::SHIFT_MASK;
-        let d = (a as RegDataUnsigned) << sh;
-        d as RegData
-    }
-
-    pub fn srl(&self, a: RegData, b: RegData) -> RegData {
-        let sh = b & Self::SHIFT_MASK;
-        let d = a as RegDataUnsigned >> sh;
-        d as RegData
-    }
-
-    pub fn sra(&self, a: RegData, b: RegData) -> RegData {
-        let sh = b & Self::SHIFT_MASK as RegData;
-        a >> sh
-    }
-
-    pub fn slt(&self, a: RegData, b: RegData) -> RegData {
-        if a < b {
-            1
-        } else {
-            0
+    pub fn process(&self, op: AluControl, src_a: RegData, src_b: RegData) -> RegData {
+        match op {
+            AluControl::Add => RegData::signed(src_a.i().wrapping_add(src_b.i())),
+            AluControl::Sub => RegData::signed(src_a.i().wrapping_sub(src_b.i())),
+            AluControl::And => RegData::unsigned(src_a.u() & src_b.u()),
+            AluControl::Or => RegData::unsigned(src_a.u() | src_b.u()),
+            AluControl::Xor => RegData::unsigned(src_a.u() ^ src_b.u()),
+            AluControl::Sll => {
+                let sh = src_b.u() & Self::SHIFT_MASK;
+                RegData::unsigned(src_a.u() << sh)
+            }
+            AluControl::Srl => {
+                let sh = src_b.u() & Self::SHIFT_MASK;
+                RegData::unsigned(src_a.u() >> sh)
+            }
+            AluControl::Sra => {
+                let sh = src_b.u() & Self::SHIFT_MASK;
+                RegData::signed(src_a.i() >> sh)
+            }
+            AluControl::Slt => RegData::signed(if src_a.i() < src_b.i() { 1 } else { 0 }),
+            AluControl::Sltu => RegData::unsigned(if src_a.u() < src_b.u() { 1 } else { 0 }),
         }
     }
+}
 
-    pub fn sltu(&self, a: RegData, b: RegData) -> RegData {
-        let a = a as RegDataUnsigned;
-        let b = b as RegDataUnsigned;
-        if a < b {
-            1
-        } else {
-            0
-        }
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum AluControl {
+    #[default]
+    Add,
+    Sub,
+    And,
+    Or,
+    Xor,
+    Sll,
+    Srl,
+    Sra,
+    Slt,
+    Sltu,
 }

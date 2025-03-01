@@ -1,6 +1,5 @@
 pub use self::errno::Errno;
 pub use self::loader::Loader;
-use crate::components::cpu::reg::RegDataUnsigned;
 use crate::components::memory::{Address, Memory, MemoryAccess};
 
 use std::fs::File;
@@ -132,15 +131,9 @@ impl Os {
             })
     }
 
-    pub fn read(
-        &mut self,
-        mem: &mut Memory,
-        file: Fd,
-        buf: Address,
-        count: RegDataUnsigned,
-    ) -> Result {
+    pub fn read(&mut self, mem: &mut Memory, file: Fd, buf: Address, count: u32) -> Result {
         assert_fd_valid!(file);
-        let buf = &mut mem[buf..buf + count];
+        let buf = &mut mem[buf..buf + count as Address];
         match file {
             0 => io::stdin().read(buf),
             1 | 2 => return Err((-1, errno::EBADF)),
@@ -175,7 +168,7 @@ impl Os {
         let prev_heap_end = self.heap_end;
         self.heap_end = (self.heap_end as i32 + incr) as _;
         if self.heap_end > stack_ptr {
-            // TODO Move printing to diagnostics
+            // TODO Make this an exception
             eprintln!(
                 "Heap and stack collision: {:05x}, {:05x}",
                 self.heap_end, stack_ptr
@@ -186,15 +179,9 @@ impl Os {
         Ok(prev_heap_end as _)
     }
 
-    pub fn write(
-        &mut self,
-        mem: &Memory,
-        file: Fd,
-        buf: Address,
-        count: RegDataUnsigned,
-    ) -> Result {
+    pub fn write(&mut self, mem: &Memory, file: Fd, buf: Address, count: u32) -> Result {
         assert_fd_valid!(file);
-        let buf = &mem[buf..buf + count];
+        let buf = &mem[buf..buf + count as Address];
         match file {
             0 => return Err((-1, errno::EBADF)),
             1 => io::stdout().write(buf),

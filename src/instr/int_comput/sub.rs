@@ -1,3 +1,3 @@
-use super::int_reg_reg_op;
+use super::int_comput_instr;
 
-int_reg_reg_op!(Sub, sub);
+int_comput_instr!(Sub, Reg, Sub);

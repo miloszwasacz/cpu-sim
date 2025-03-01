@@ -25,89 +25,42 @@ instr_mod!(srl);
 instr_mod!(sub);
 instr_mod!(xor);
 
-macro_rules! int_reg_imm_instr {
-    ($name:ident, $alu_op:ident) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub struct $name(pub(in crate::instr) crate::instr::decode::ITypeFormat);
+macro_rules! int_comput_instr {
+    ($name:ident, Reg, $alu_ctrl:ident) => {
+        crate::instr::int_comput::int_comput_instr!($name, crate::instr::decode::RTypeFormat, Reg, $alu_ctrl);
+    };
+    ($name:ident, Imm, $alu_ctrl:ident) => {
+        crate::instr::int_comput::int_comput_instr!($name, crate::instr::decode::ITypeFormat, Imm, $alu_ctrl);
+    };
+    ($name:ident, $format:path, $src_b:ident, $alu_ctrl:ident) => {
+        #[derive(
+            Debug, 
+            cpu_sim_derive::Display, 
+            Clone, 
+            Copy, 
+            PartialEq, 
+            Eq, 
+            cpu_sim_derive::Decode, 
+            cpu_sim_derive::Issue, 
+            cpu_sim_derive::MemoryAccess, 
+            cpu_sim_derive::Writeback, 
+            cpu_sim_derive::Instr,
+        )]
+        pub struct $name($format);
 
-        impl $name {
-            pub fn dest(&self) -> crate::components::cpu::reg::arf::ArchRegName {
-                self.0.rd
+        impl crate::instr::Execute for $name {
+            fn exec_unit(&self) -> crate::instr::execute::ExecUnit {
+                crate::instr::execute::ExecUnit::Alu
             }
 
-            pub fn src(&self) -> crate::components::cpu::reg::arf::ArchRegName {
-                self.0.rs1
+            fn alu_src_b(&self) -> crate::instr::execute::AluSrcB {
+                crate::instr::execute::AluSrcB::$src_b
             }
 
-            pub fn imm(&self) -> crate::instr::Immediate {
-                self.0.imm
+            fn alu_control(&self) -> crate::components::cpu::alu::AluControl {
+                crate::components::cpu::alu::AluControl::$alu_ctrl
             }
         }
-
-        impl crate::instr::Instr for $name {}
-        
-        crate::instr::impl_execute!($name, |&self, reg_file, _, alu, _, _| {
-            let src = reg_file.get(self.src());
-            let data = alu.$alu_op(src.get(), self.imm());
-            Ok(crate::instr::execute::ExecuteResult::Alu(self.dest(), data))
-        });
-        
-        crate::instr::impl_mem_access!($name);
     };
 }
-use int_reg_imm_instr;
-
-macro_rules! int_upper_imm_instr {
-    ($name:ident) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub struct $name(pub(in crate::instr) crate::instr::decode::UTypeFormat);
-
-        impl $name {
-            pub fn dest(&self) -> crate::components::cpu::reg::arf::ArchRegName {
-                self.0.rd
-            }
-
-            pub fn imm(&self) -> crate::instr::Immediate {
-                self.0.imm
-            }
-        }
-
-        impl crate::instr::Instr for $name {}
-        
-        crate::instr::impl_mem_access!($name);
-    };
-}
-use int_upper_imm_instr;
-
-macro_rules! int_reg_reg_op {
-    ($name:ident, $alu_op:ident) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub struct $name(pub(in crate::instr) crate::instr::decode::RTypeFormat);
-
-        impl $name {
-            pub fn dest(&self) -> crate::components::cpu::reg::arf::ArchRegName {
-                self.0.rd
-            }
-
-            pub fn src1(&self) -> crate::components::cpu::reg::arf::ArchRegName {
-                self.0.rs1
-            }
-
-            pub fn src2(&self) -> crate::components::cpu::reg::arf::ArchRegName {
-                self.0.rs2
-            }
-        }
-
-        impl crate::instr::Instr for $name {}
-        
-        crate::instr::impl_execute!($name, |&self, reg_file, _, alu, _, _| {
-            let src1 = reg_file.get(self.src1());
-            let src2 = reg_file.get(self.src2());
-            let data = alu.$alu_op(src1.get(), src2.get());
-            Ok(crate::instr::execute::ExecuteResult::Alu(self.dest(), data))
-        });
-        
-        crate::instr::impl_mem_access!($name);
-    };
-}
-use int_reg_reg_op;
+use int_comput_instr;

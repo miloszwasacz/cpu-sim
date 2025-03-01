@@ -1,9 +1,30 @@
-use super::int_reg_imm_instr;
-use crate::instr::display_width;
+use crate::components::cpu::alu::AluControl;
+use crate::instr::decode::ITypeFormat;
+use crate::instr::display::display_width;
+use crate::instr::execute::{AluSrcB, ExecUnit};
+use crate::instr::{Decode, Execute};
 
+use cpu_sim_derive::{Decode, Instr, Issue, MemoryAccess, Writeback};
 use std::fmt;
 
-int_reg_imm_instr!(Addi, add);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Decode, Issue, MemoryAccess, Writeback, Instr)]
+pub struct Addi(ITypeFormat);
+
+impl Execute for Addi {
+    fn exec_unit(&self) -> ExecUnit {
+        ExecUnit::Alu
+    }
+
+    fn alu_src_b(&self) -> AluSrcB {
+        AluSrcB::Imm
+    }
+
+    fn alu_control(&self) -> AluControl {
+        AluControl::Add
+    }
+}
+
+//#region Display
 
 impl Addi {
     const NOP_DISPLAY_NAME: &'static str = "nop";
@@ -15,10 +36,10 @@ impl fmt::Display for Addi {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let width = display_width!(f);
 
-        let is_li = self.src().is_zero();
+        let is_li = self.rs1().is_zero();
         let is_mv = self.imm() == 0;
 
-        if self.dest().is_zero() && is_li && is_mv {
+        if self.rd().is_zero() && is_li && is_mv {
             return write!(f, "{:<width$}", Self::NOP_DISPLAY_NAME);
         }
 
@@ -30,10 +51,10 @@ impl fmt::Display for Addi {
             Self::DISPLAY_NAME
         };
         write!(f, "{:<width$} ", name)?;
-        self.dest().fmt(f)?;
+        self.rd().fmt(f)?;
         if !is_li {
             write!(f, ", ")?;
-            self.src().fmt(f)?;
+            self.rs1().fmt(f)?;
             if is_mv {
                 return Ok(());
             }
@@ -42,3 +63,5 @@ impl fmt::Display for Addi {
         self.imm().fmt(f)
     }
 }
+
+//#endregion

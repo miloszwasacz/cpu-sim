@@ -1,22 +1,26 @@
 [workspace]
-members = ["crates/derive"]
+members = ["crates/build", "crates/derive"]
 
 [workspace.dependencies]
-convert_case = "0.7.1"
+convert_case = "0.8.0"
 const_format = "0.2.34"
 itertools = "0.14.0"
+delegate = "0.13.2"
 
 [package]
 name = "cpu-sim"
 version = "0.1.0"
 edition = "2021"
+build = "crates/build/src/main.rs"
 
 [dependencies]
 cpu_sim_derive = { path = "crates/derive" }
 const_format = { workspace = true }
+delegate = { workspace = true }
 elf = "0.7.4"
 libc = "0.2.169"
 
 [build-dependencies]
+const_format = { workspace = true }
 convert_case = { workspace = true }
 itertools = { workspace = true }

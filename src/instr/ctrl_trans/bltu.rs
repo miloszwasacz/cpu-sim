@@ -1,5 +1,3 @@
-use super::{cond_branch, impl_branch_execute};
+use super::cond_branch;
 
-cond_branch!(Bltu);
-
-impl_branch_execute!(Bltu, lt, unsigned);
+cond_branch!(Bltu, Ltu);

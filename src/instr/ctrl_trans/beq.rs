@@ -1,5 +1,3 @@
-use super::{cond_branch, impl_branch_execute};
+use super::cond_branch;
 
-cond_branch!(Beq);
-
-impl_branch_execute!(Beq, eq);
+cond_branch!(Beq, Eq);

@@ -1,47 +1,54 @@
-use crate::components::cpu::reg::arf::ArchRegName;
-use crate::components::cpu::reg::RegData;
-use crate::components::memory::Address;
+use crate::components::cpu::alu::AluControl;
 use crate::instr::decode::ITypeFormat;
-use crate::instr::execute::ExecuteResult;
-use crate::instr::{display_width, Immediate, Instr};
+use crate::instr::display::display_width;
+use crate::instr::execute::{AluSrcA, AluSrcB, ExecUnit};
+use crate::instr::issue::Branch;
+use crate::instr::{Decode, Execute, Issue};
 
+use cpu_sim_derive::{Decode, Instr, MemoryAccess, Writeback};
 use std::fmt;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Jalr(pub(in crate::instr) ITypeFormat);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Decode, MemoryAccess, Writeback, Instr)]
+pub struct Jalr(ITypeFormat);
 
-impl Jalr {
-    const JR_DISPLAY_NAME: &'static str = "jr";
-
-    pub fn dest(&self) -> ArchRegName {
-        self.0.rd
-    }
-
-    pub fn base(&self) -> ArchRegName {
-        self.0.rs1
-    }
-
-    pub fn offset(&self) -> Immediate {
-        self.0.imm
+impl Issue for Jalr {
+    fn branch(&self) -> Branch {
+        Branch::Jump
     }
 }
 
-impl Instr for Jalr {}
+impl Execute for Jalr {
+    fn exec_unit(&self) -> ExecUnit {
+        ExecUnit::Branch
+    }
 
-impl_execute!(Jalr, |&self, reg_file, pc, alu, _, _| {
-    const MASK: RegData = RegData::MAX << 1;
-    let base = reg_file.get(self.base());
-    let target = alu.add(base.get(), self.offset()) & MASK;
-    let link = pc.read_next();
-    Ok(ExecuteResult::Jump(target as Address, self.dest(), link))
-});
+    fn alu_src_a(&self) -> AluSrcA {
+        AluSrcA::Reg
+    }
 
-impl_mem_access!(Jalr);
+    fn alu_src_b(&self) -> AluSrcB {
+        AluSrcB::Imm
+    }
+
+    fn alu_control(&self) -> AluControl {
+        AluControl::Add
+    }
+
+    fn mask_jump_target(&self) -> bool {
+        true
+    }
+}
+
+//#region Display
+
+impl Jalr {
+    const JR_DISPLAY_NAME: &'static str = "jr";
+}
 
 impl fmt::Display for Jalr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let width = display_width!(f);
-        let is_jr = self.dest().is_zero() && self.offset() == 0;
+        let is_jr = self.rd().is_zero() && self.imm() == 0;
 
         let name = if is_jr {
             Self::JR_DISPLAY_NAME
@@ -50,17 +57,19 @@ impl fmt::Display for Jalr {
         };
         write!(f, "{:<width$} ", name)?;
         if !is_jr {
-            self.dest().fmt(f)?;
+            self.rd().fmt(f)?;
             write!(f, ", ")?;
         }
 
-        self.base().fmt(f)?;
+        self.rs1().fmt(f)?;
 
         if !is_jr {
             write!(f, ", ")?;
-            self.offset().fmt(f)?;
+            self.imm().fmt(f)?;
         }
 
         Ok(())
     }
 }
+
+//#endregion

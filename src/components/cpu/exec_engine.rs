@@ -1,230 +1,247 @@
 use self::agu::Agu;
 use self::alu::Alu;
+use self::branch::BranchUnit;
 use super::circuit::{Circuit, ClockCycle};
-use super::error::{ExecuteError, WritebackError};
-use super::front_end::{DecodeOption, DecodeRegs};
-use super::reg::arf::{ArchRegFile, ArchRegName};
-use super::reg::RegData;
-use super::{flush_pipeline_regs, make_pipeline_regs, PipelineRegs, ProgramCounter};
-use crate::components::memory::Address;
-use crate::instr::execute::ExecuteResult;
-use crate::instr::Instr;
-
-use std::rc::Rc;
+use super::hazard::HazardUnit;
+use super::reg::arf::ArchRegFile;
+use super::reg::pipeline::{
+    ErrorControl, ExecuteControl, ExecuteRegs, IssueControl, IssueRegs, Jump, MemAccessRegs,
+    PipelineRegs, WritebackControl, WritebackRegs,
+};
+use super::reg::{RegData, RegFile};
+use crate::instr::execute::{AluSrcA, AluSrcB, ExecUnit};
+use crate::instr::EnvTrap;
 
 pub mod agu;
 pub mod alu;
+pub mod branch;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum EnvTrap {
-    None,
-    Syscall(ProgramCounter),
-    Break(ProgramCounter),
-}
-
-pub(super) struct ExecutionEngine {
-    // Execute
-    decode_regs: PipelineRegs<DecodeRegs>,
+pub struct ExecutionEngine {
+    // Issue
+    issue_regs: PipelineRegs<IssueRegs>,
     int_reg_file: Circuit<ArchRegFile>,
-    reg_file_read_regs: PipelineRegs<RegFileRegs>,
+    execute_regs: PipelineRegs<ExecuteRegs>,
+
+    // Execute
     alu: Circuit<Alu>,
     load_agu: Circuit<Agu>,
     store_agu: Circuit<Agu>,
-    execute_regs: PipelineRegs<ExecuteRegs>,
+    branch_unit: Circuit<BranchUnit>,
+    mem_access_regs: PipelineRegs<MemAccessRegs>,
 
     // Writeback
-    writeback_regs: PipelineRegs<WritebackRegs>,
-    reg_file_write_regs: PipelineRegs<RegFileRegs>,
+    writeback_regs: Option<PipelineRegs<WritebackRegs>>,
 }
 
 impl ExecutionEngine {
-    pub(super) fn new(decode_regs: &PipelineRegs<DecodeRegs>) -> Self {
-        let decode_regs = decode_regs.clone();
-        let int_reg_file = ArchRegFile::new().into();
-        let reg_file_read_regs = make_pipeline_regs();
-        let alu = Alu::new().into();
-        let load_agu = Agu::new().into();
-        let store_agu = Agu::new().into();
-        let execute_regs = make_pipeline_regs();
+    const WB_INIT_ERR: &'static str = "`writeback` should be initialized";
 
-        let writeback_regs = make_pipeline_regs();
-        let reg_file_write_regs = make_pipeline_regs();
+    // TODO mention connecting `writeback_regs` in the docs
+    pub(super) fn new(issue_regs: &PipelineRegs<IssueRegs>) -> Self {
+        // Issue
+        let issue_regs = issue_regs.clone();
+        let int_reg_file = Default::default();
+        let execute_regs = Default::default();
+
+        // Execute
+        let alu = Circuit::new(Alu::new());
+        let load_agu = Circuit::new(Agu::new());
+        let store_agu = Circuit::new(Agu::new());
+        let branch_unit = Circuit::new(BranchUnit::new());
+        let mem_access_regs = Default::default();
 
         Self {
-            decode_regs,
+            // Issue
+            issue_regs,
             int_reg_file,
-            reg_file_read_regs,
+            execute_regs,
+
+            // Execute
             alu,
             load_agu,
             store_agu,
-            execute_regs,
+            branch_unit,
+            mem_access_regs,
 
-            writeback_regs,
-            reg_file_write_regs,
+            // Writeback
+            writeback_regs: None,
         }
+    }
+
+    pub(super) fn connect_writeback_regs(&mut self, writeback_regs: &PipelineRegs<WritebackRegs>) {
+        self.writeback_regs = Some(writeback_regs.clone());
+    }
+
+    pub fn execute_regs(&self) -> &PipelineRegs<ExecuteRegs> {
+        &self.execute_regs
+    }
+
+    pub fn mem_access_regs(&self) -> &PipelineRegs<MemAccessRegs> {
+        &self.mem_access_regs
     }
 
     pub(super) unsafe fn int_reg_file(&mut self) -> &mut ArchRegFile {
         self.int_reg_file.inner_mut()
     }
 
-    pub(super) fn id_ex_write_reg(&self) -> Option<ArchRegName> {
-        self.decode_regs
-            .borrow()
-            .read(ClockCycle::FirstHalf)
-            .instr
-            .as_ref()
-            .into_option()
-            .and_then(|instr| instr.write_reg())
-    }
-
-    pub(super) fn mem_wb_write_reg(&self) -> Option<ArchRegName> {
-        self.writeback_regs
-            .borrow()
-            .read(ClockCycle::FirstHalf)
-            .instr
-            .as_ref()
-            .and_then(|instr| instr.write_reg())
-    }
-
-    pub(super) fn execute_regs(&self) -> &PipelineRegs<ExecuteRegs> {
-        &self.execute_regs
-    }
-
-    pub(super) fn writeback_regs(&self) -> &PipelineRegs<WritebackRegs> {
-        &self.writeback_regs
-    }
-
-    pub(super) fn reg_file_write_regs(&self) -> &PipelineRegs<RegFileRegs> {
-        &self.reg_file_write_regs
-    }
-
-    pub fn execute(&mut self) -> Result<EnvTrap, ExecuteError> {
-        let reg_file = self
-            .reg_file_read_regs
-            .borrow()
-            .read(ClockCycle::FirstHalf)
-            .0;
-
-        let decode_regs_circ = self.decode_regs.borrow();
-        let decode_regs = decode_regs_circ.read(ClockCycle::FirstHalf);
-        let instr = decode_regs.instr.as_ref();
-        let pc = decode_regs.pc;
-
-        // We can mark all those units as 'in use' since they are not shared between different stages of the pipeline.
-        let alu = self.alu.write(ClockCycle::Full);
-        let load_agu = self.load_agu.write(ClockCycle::Full);
-        let store_agu = self.store_agu.write(ClockCycle::Full);
-
-        let mut execute_regs_circ = self.execute_regs.borrow_mut();
-        let execute_regs = execute_regs_circ.write(ClockCycle::SecondHalf);
-        *execute_regs = ExecuteRegs {
-            pc,
-            instr: decode_regs.instr.clone(),
-            ..Default::default()
-        };
-
-        self.reg_file_read_regs
-            .borrow_mut()
-            .write(ClockCycle::SecondHalf)
-            .0 = *self.int_reg_file.read(ClockCycle::SecondHalf);
-
-        if let DecodeOption::Some(instr) = instr {
-            match instr.execute(&reg_file, pc, alu, load_agu, store_agu)? {
-                ExecuteResult::Alu(dest, data) => {
-                    execute_regs.alu = Some(AluRegs { dest, data });
-                }
-                ExecuteResult::Jump(target, dest, addr) => {
-                    let data = addr as RegData;
-                    execute_regs.alu = Some(AluRegs { dest, data });
-                    execute_regs.branch = Some(target);
-                    // TODO Can't we handle jumps earlier since we "know" the destination?
-                }
-                ExecuteResult::Branch(target) => {
-                    execute_regs.branch = target;
-                }
-                ExecuteResult::LoadAgu(dest, addr) => {
-                    execute_regs.load_agu = Some(LoadAguRegs { dest, addr });
-                }
-                ExecuteResult::StoreAgu(addr, data) => {
-                    execute_regs.store_agu = Some(StoreAguRegs { addr, data });
-                }
-                ExecuteResult::Ecall => return Ok(EnvTrap::Syscall(pc)),
-                ExecuteResult::Ebreak => return Ok(EnvTrap::Break(pc)),
-            }
-        }
-        Ok(EnvTrap::None)
-    }
-
-    pub fn writeback(&mut self) -> Result<(), WritebackError> {
-        // TODO Move logging to diagnostics
-        let writeback_regs_circ = self.writeback_regs.borrow();
-        let writeback_regs = writeback_regs_circ.read(ClockCycle::FirstHalf);
-        if let Some(instr) = writeback_regs.instr.as_ref() {
-            println!("{:05x}    {:#}", writeback_regs.pc.current.get(), instr);
-        }
-
-        let write_regs = self.reg_file_write_regs.borrow_mut();
-        let reg_file = self.int_reg_file.write(ClockCycle::FirstHalf);
-        *reg_file = write_regs.read(ClockCycle::FirstHalf).0;
-
-        Ok(())
-    }
-
-    pub fn finish_execute_cycle(&mut self) {
+    pub fn start_cycle(&mut self) {
         self.int_reg_file.reset();
-        self.reg_file_read_regs.borrow_mut().reset();
+        self.execute_regs.reset();
         self.alu.reset();
         self.load_agu.reset();
         self.store_agu.reset();
-        self.execute_regs.borrow_mut().reset();
+        self.branch_unit.reset();
+        self.mem_access_regs.reset();
     }
 
-    pub fn finish_writeback_cycle(&mut self) {}
+    pub fn issue(&mut self, hazard_unit: &mut HazardUnit) {
+        let IssueRegs {
+            pc_ctrl,
+            is_ctrl,
+            mut ex_ctrl,
+            mem_ctrl,
+            wb_ctrl,
+            err_ctrl,
+            rs1,
+            rs2,
+            rd,
+            imm,
+        } = self.issue_regs.read(ClockCycle::FirstHalf);
+        let IssueControl { branch } = is_ctrl;
+        let int_reg_file = self.int_reg_file.read(ClockCycle::SecondHalf);
 
-    pub fn flush(&mut self) {
-        flush_pipeline_regs(&mut self.reg_file_read_regs);
-        flush_pipeline_regs(&mut self.execute_regs);
+        let src1 = (rs1, int_reg_file.get(rs1));
+        let src2 = (rs2, int_reg_file.get(rs2));
+        let (br_src1, br_src2) = hazard_unit.forward_issue(src1, src2);
+        ex_ctrl.jump = branch.jumps(br_src1, br_src2);
+        let write_reg = rd;
+
+        let execute_regs = ExecuteRegs {
+            pc_ctrl,
+            ex_ctrl,
+            mem_ctrl,
+            wb_ctrl,
+            err_ctrl,
+            src1,
+            src2,
+            write_reg,
+            imm,
+        };
+
+        self.execute_regs
+            .write(ClockCycle::SecondHalf, execute_regs);
+
+        if ex_ctrl.jump {
+            hazard_unit.issue_jump();
+        }
+    }
+
+    pub fn execute(&mut self, hazard_unit: &HazardUnit) -> (Jump, Option<EnvTrap>) {
+        let ExecuteRegs {
+            pc_ctrl,
+            ex_ctrl,
+            mem_ctrl,
+            wb_ctrl,
+            mut err_ctrl,
+            src1,
+            src2,
+            write_reg,
+            imm,
+        } = self.execute_regs.read(ClockCycle::FirstHalf);
+        let ExecuteControl {
+            exec_unit,
+            alu_src_a,
+            alu_src_b,
+            alu_control,
+            jump,
+            mask_jump_target,
+            env_trap,
+        } = ex_ctrl;
+        let (src1, src2) = hazard_unit.forward_execute(src1, src2);
+
+        let mut jump_target = None;
+        let alu_out = match exec_unit {
+            ExecUnit::Alu => {
+                let src_a = match alu_src_a {
+                    AluSrcA::Reg => src1,
+                    AluSrcA::Pc => RegData::address(pc_ctrl.pc),
+                };
+                let src_b = match alu_src_b {
+                    AluSrcB::Reg => src2,
+                    AluSrcB::Imm => RegData::signed(imm),
+                };
+                let alu = self.alu.write(ClockCycle::FirstHalf);
+
+                alu.process(alu_control, src_a, src_b)
+            }
+            ExecUnit::LoadAgu => {
+                let base = src1;
+                let offset = imm;
+                let agu = self.load_agu.write(ClockCycle::FirstHalf);
+
+                agu.addr(base, offset)
+            }
+            ExecUnit::StoreAgu => {
+                let base = src1;
+                let offset = imm;
+                let agu = self.store_agu.write(ClockCycle::FirstHalf);
+
+                agu.addr(base, offset)
+            }
+            ExecUnit::Branch => {
+                let base = match alu_src_a {
+                    AluSrcA::Reg => src1,
+                    AluSrcA::Pc => RegData::address(pc_ctrl.pc),
+                };
+                let offset = imm;
+                let branch_unit = self.branch_unit.write(ClockCycle::FirstHalf);
+
+                if jump {
+                    let target = branch_unit.target(base, offset, mask_jump_target);
+                    if target == pc_ctrl.pc {
+                        err_ctrl.jump_to_self = true;
+                    }
+                    jump_target = Some(target);
+                }
+                RegData::address(pc_ctrl.pc_plus4)
+            }
+        };
+        let write_data = src2;
+        let mem_access_regs = MemAccessRegs {
+            mem_ctrl,
+            wb_ctrl,
+            err_ctrl,
+            alu_out,
+            write_data,
+            write_reg,
+        };
+
+        self.mem_access_regs
+            .write(ClockCycle::SecondHalf, mem_access_regs);
+
+        (jump_target, env_trap)
+    }
+
+    pub fn writeback(&mut self) -> ErrorControl {
+        let writeback_regs = self.writeback_regs.as_ref().expect(Self::WB_INIT_ERR);
+        let WritebackRegs {
+            wb_ctrl,
+            err_ctrl,
+            alu_out,
+            read_data,
+            write_reg,
+        } = writeback_regs.read(ClockCycle::FirstHalf);
+        let WritebackControl {
+            mem_to_reg,
+            reg_write,
+        } = wb_ctrl;
+        let int_reg_file = self.int_reg_file.write(ClockCycle::FirstHalf);
+
+        let data = if mem_to_reg { read_data } else { alu_out };
+        if reg_write {
+            int_reg_file.set(write_reg, data);
+        }
+
+        err_ctrl
     }
 }
-
-//#region Pipeline registers
-
-#[derive(Debug, Default)]
-pub(super) struct ExecuteRegs {
-    pub pc: ProgramCounter,
-    pub instr: DecodeOption<Rc<dyn Instr>>,
-    pub alu: Option<AluRegs>,
-    pub load_agu: Option<LoadAguRegs>,
-    pub store_agu: Option<StoreAguRegs>,
-    pub branch: Option<Address>,
-}
-
-#[derive(Debug, Default)]
-pub(super) struct RegFileRegs(pub ArchRegFile);
-
-#[derive(Debug, Default)]
-pub(super) struct AluRegs {
-    pub dest: ArchRegName,
-    pub data: RegData,
-}
-
-#[derive(Debug, Default)]
-pub(super) struct LoadAguRegs {
-    pub dest: ArchRegName,
-    pub addr: Address,
-}
-
-#[derive(Debug, Default)]
-pub(super) struct StoreAguRegs {
-    pub addr: Address,
-    pub data: RegData,
-}
-
-#[derive(Debug, Default)]
-pub(super) struct WritebackRegs {
-    pub instr: Option<Rc<dyn Instr>>,
-    pub pc: ProgramCounter,
-}
-
-//#endregion

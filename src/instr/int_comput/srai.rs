@@ -1,3 +1,3 @@
-use super::int_reg_imm_instr;
+use super::int_comput_instr;
 
-int_reg_imm_instr!(Srai, sra);
+int_comput_instr!(Srai, Imm, Sra);

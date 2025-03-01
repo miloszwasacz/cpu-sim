@@ -1,3 +1,3 @@
-use super::load_instr;
+use super::load_store_instr;
 
-load_instr!(Lh<i16>);
+load_store_instr!(Lh, Load<i16>);

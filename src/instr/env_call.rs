@@ -1,5 +1,6 @@
 use super::instr_mod;
 use crate::components::cpu::reg::RegData;
+use crate::os::OsFnResult;
 
 use std::error::Error;
 use std::fmt;
@@ -8,39 +9,53 @@ instr_mod!(ecall);
 instr_mod!(ebreak);
 
 macro_rules! system_instr {
-    ($name:ident) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub struct $name;
+    ($name:ident, $trap:ident) => {
+        #[derive(
+            Debug,
+            Clone,
+            Copy,
+            PartialEq,
+            Eq,
+            cpu_sim_derive::Issue,
+            cpu_sim_derive::MemoryAccess,
+            cpu_sim_derive::Instr,
+        )]
+        pub struct $name(());
 
         impl crate::instr::decode::Decode for $name {
-            fn decode(_: crate::instr::raw::RawInstr) -> Self
-            where
-                Self: Sized,
-            {
-                Self
+            fn decode(raw: crate::instr::raw::RawInstr) -> Self {
+                debug_assert_eq!(raw.encoding(), Self::ENCODING);
+                Self(())
             }
         }
 
-        impl crate::instr::Instr for $name {}
-
-        impl crate::instr::stall::StallControl for $name {
-            fn read_regs(
-                &self,
-            ) -> std::collections::HashSet<crate::components::cpu::reg::arf::ArchRegName> {
-                let regs: [_; crate::components::cpu::reg::arf::ArchRegFile::SIZE] = std::array::from_fn(|reg| {
-                    reg.try_into().unwrap()
-                });
-                std::collections::HashSet::from(regs)
+        impl crate::instr::Execute for $name {
+            fn exec_unit(&self) -> crate::instr::execute::ExecUnit {
+                crate::instr::execute::ExecUnit::Alu
             }
 
-            fn write_reg(&self) -> Option<crate::components::cpu::reg::arf::ArchRegName> {
-                None
+            fn alu_src_b(&self) -> crate::instr::execute::AluSrcB {
+                crate::instr::execute::AluSrcB::Reg
+            }
+
+            fn alu_control(&self) -> crate::components::cpu::alu::AluControl {
+                crate::components::cpu::alu::AluControl::Add
+            }
+            
+            fn env_trap(&self) -> Option<crate::instr::EnvTrap> {
+                Some(crate::instr::EnvTrap::$trap)
+            }
+        }
+
+        impl crate::instr::Writeback for $name {
+            fn reg_write(&self) -> bool {
+                false
             }
         }
 
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                let width = crate::instr::display_width!(f);
+                let width = crate::instr::display::display_width!(f);
                 write!(f, "{:<width$}", Self::DISPLAY_NAME)
             }
         }
@@ -52,7 +67,7 @@ use system_instr;
 
 macro_rules! from_into_syscall {
     ($( $code:path => $n:literal, )*) => {
-        impl From<SyscallCode> for u32 {
+        impl From<SyscallCode> for OsFnResult {
             fn from(value: SyscallCode) -> Self {
                 match value {
                     $( $code => $n, )*
@@ -60,10 +75,10 @@ macro_rules! from_into_syscall {
             }
         }
 
-        impl TryFrom<u32> for SyscallCode {
+        impl TryFrom<OsFnResult> for SyscallCode {
             type Error = SyscallConversionError;
-        
-            fn try_from(value: u32) -> Result<Self, Self::Error> {
+
+            fn try_from(value: OsFnResult) -> Result<Self, Self::Error> {
                 match value {
                     $( $n => Ok($code), )*
                     code => Err(SyscallConversionError(code)),
@@ -98,13 +113,12 @@ impl TryFrom<RegData> for SyscallCode {
     type Error = SyscallConversionError;
 
     fn try_from(value: RegData) -> Result<Self, Self::Error> {
-        let value = value as u32;
-        Self::try_from(value)
+        Self::try_from(value.i())
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SyscallConversionError(u32);
+pub struct SyscallConversionError(OsFnResult);
 
 impl fmt::Display for SyscallConversionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

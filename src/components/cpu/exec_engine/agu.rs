@@ -1,15 +1,14 @@
 use crate::components::cpu::reg::RegData;
-use crate::components::memory::Address;
 use crate::instr::Immediate;
 
-pub struct Agu(());
+pub(super) struct Agu(());
 
 impl Agu {
-    pub(super) fn new() -> Self {
+    pub fn new() -> Self {
         Self(())
     }
 
-    pub fn addr(&self, base: RegData, offset: Immediate) -> Address {
-        base.wrapping_add(offset) as Address
+    pub fn addr(&self, base: RegData, offset: Immediate) -> RegData {
+        RegData::signed(base.i().wrapping_add(offset))
     }
 }

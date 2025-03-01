@@ -1,0 +1,9 @@
+[package]
+name = "cpu-sim-build"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+const_format = { workspace = true }
+convert_case = { workspace = true }
+itertools = { workspace = true }

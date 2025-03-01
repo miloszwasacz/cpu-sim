@@ -1,174 +1,132 @@
-use self::decoder::Decoder;
+use self::decoder::{DecodeResult, Decoder};
 use super::circuit::{Circuit, ClockCycle};
 use super::error::{DecodeError, FetchError};
-use super::reg::arf::ArchRegName;
-use super::{flush_pipeline_regs, make_pipeline_regs, PipelineRegs, ProgramCounter, Stall};
-use crate::components::memory::{Address, Memory, MemoryAccess};
+use super::reg::pipeline::{
+    DecodeRegs, ErrorControl, FetchRegs, IssueRegs, Jump, PcControl, PipelineRegs,
+};
+use super::Pc;
+use crate::components::memory::{Memory, MemoryAccess};
 use crate::components::Bus;
-use crate::instr::raw::RawInstr;
-use crate::instr::stall::nop;
-use crate::instr::Instr;
+use crate::instr::raw::RawInstrBits;
 use crate::{BITS_IN_BYTE, IALIGN};
-
-use std::rc::Rc;
 
 mod decoder;
 
 pub(super) struct FrontEnd<'m> {
-    mem_bus: Circuit<Bus<'m, Memory>>,
+    // Fetch
     fetch_regs: PipelineRegs<FetchRegs>,
-    decoder: Circuit<Decoder>,
+    mem_bus: Circuit<Bus<'m, Memory>>,
     decode_regs: PipelineRegs<DecodeRegs>,
+
+    // Decode
+    decoder: Circuit<Decoder>,
+    issue_regs: PipelineRegs<IssueRegs>,
 }
 
 impl<'m> FrontEnd<'m> {
     pub(super) fn new(mem_bus: Bus<'m, Memory>) -> Self {
+        // Fetch
+        let fetch_regs = Default::default();
         let mem_bus = mem_bus.into();
-        let fetch_regs = make_pipeline_regs();
+        let decode_regs = Default::default();
+
+        // Decode
         let decoder = Decoder::new().into();
-        let decode_regs = make_pipeline_regs();
+        let issue_regs = Default::default();
+
         Self {
-            mem_bus,
+            // Fetch
             fetch_regs,
-            decoder,
+            mem_bus,
             decode_regs,
+
+            // Decode
+            decoder,
+            issue_regs,
         }
+    }
+
+    pub(super) unsafe fn set_pc(&mut self, pc: Pc) {
+        self.fetch_regs.reset();
+        self.fetch_regs
+            .write(ClockCycle::SecondHalf, FetchRegs { pc });
+        self.fetch_regs.reset();
+    }
+
+    pub(super) fn fetch_regs(&self) -> &PipelineRegs<FetchRegs> {
+        &self.fetch_regs
     }
 
     pub(super) fn decode_regs(&self) -> &PipelineRegs<DecodeRegs> {
         &self.decode_regs
     }
 
-    pub fn fetch(&mut self, pc: &mut ProgramCounter, stall: Stall) -> Result<(), FetchError> {
-        const ALIGN: usize = IALIGN / BITS_IN_BYTE;
-
-        let addr = pc.read();
-        if addr % ALIGN as Address != 0 {
-            return Err(FetchError::InstructionAddressMisaligned(addr));
-        }
-        let bits = self.mem_bus.read(ClockCycle::Full).borrow().get(addr);
-
-        if stall {
-            return Ok(());
-        }
-
-        pc.advance();
-        *self.fetch_regs.borrow_mut().write(ClockCycle::SecondHalf) = FetchRegs {
-            instr: Some(RawInstr::new(bits)),
-            pc: *pc,
-        };
-
-        Ok(())
+    pub(super) fn issue_regs(&self) -> &PipelineRegs<IssueRegs> {
+        &self.issue_regs
     }
 
-    pub fn decode(
-        &mut self,
-        id_ex_write_reg: Option<ArchRegName>,
-        ex_mem_write_reg: Option<ArchRegName>,
-        mem_wb_write_reg: Option<ArchRegName>,
-    ) -> Result<Stall, DecodeError> {
-        let decoder = self.decoder.read(ClockCycle::FirstHalf);
-        let fetch_regs_circ = self.fetch_regs.borrow();
-        let fetch_regs = fetch_regs_circ.read(ClockCycle::FirstHalf);
-
-        let instr = fetch_regs
-            .instr
-            .as_ref()
-            .map(|instr| decoder.decode(*instr))
-            .unwrap_or(DecodeOption::None);
-
-        let stall = instr
-            .as_ref()
-            .into_option()
-            .map(|instr| {
-                let read_regs = instr.read_regs();
-                [id_ex_write_reg, ex_mem_write_reg, mem_wb_write_reg]
-                    .iter()
-                    .flatten()
-                    .any(|write_reg| read_regs.contains(write_reg))
-            })
-            .unwrap_or_default();
-
-        *self.decode_regs.borrow_mut().write(ClockCycle::SecondHalf) = DecodeRegs {
-            instr: if stall {
-                DecodeOption::Some(nop())
-            } else {
-                instr
-            },
-            pc: fetch_regs.pc,
-        };
-
-        Ok(stall)
-    }
-
-    pub fn finish_fetch_cycle(&mut self) {
+    pub fn start_cycle(&mut self) {
+        self.fetch_regs.reset();
         self.mem_bus.reset();
-        self.fetch_regs.borrow_mut().reset();
-    }
-
-    pub fn finish_decode_cycle(&mut self) {
+        self.decode_regs.reset();
         self.decoder.reset();
-        self.decode_regs.borrow_mut().reset();
+        self.issue_regs.reset();
     }
 
-    pub fn flush(&mut self) {
-        flush_pipeline_regs(&mut self.fetch_regs);
-        flush_pipeline_regs(&mut self.decode_regs);
-    }
-}
+    pub fn fetch(&mut self, jump: Jump) {
+        const ALIGN: usize = IALIGN / BITS_IN_BYTE;
+        let FetchRegs { pc } = self.fetch_regs.read(ClockCycle::FirstHalf);
 
-#[derive(Debug, Default)]
-struct FetchRegs {
-    pub instr: Option<RawInstr>,
-    pub pc: ProgramCounter,
-}
-
-#[derive(Debug, Default)]
-pub(super) struct DecodeRegs {
-    pub instr: DecodeOption<Rc<dyn Instr>>,
-    pub pc: ProgramCounter,
-}
-
-//#region DecodeOption
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-pub(super) enum DecodeOption<T> {
-    #[default]
-    None,
-    InvalidInstr(RawInstr),
-    Some(T),
-}
-
-impl<T> DecodeOption<T> {
-    pub const fn as_ref(&self) -> DecodeOption<&T> {
-        match self {
-            Self::None => DecodeOption::None,
-            Self::InvalidInstr(instr) => DecodeOption::InvalidInstr(*instr),
-            Self::Some(val) => DecodeOption::Some(val),
+        let mut err_ctrl = ErrorControl {
+            pc,
+            ..Default::default()
+        };
+        if pc % ALIGN as Pc != 0 {
+            err_ctrl.fetch_error = Some(FetchError::MisalignedInstr(pc));
         }
+
+        let pc_ctrl = PcControl {
+            pc,
+            pc_plus4: pc + size_of::<RawInstrBits>() as Pc,
+        };
+        let instr: RawInstrBits = self.mem_bus.read(ClockCycle::FirstHalf).borrow().get(pc);
+        let decode_regs = DecodeRegs {
+            pc_ctrl,
+            err_ctrl,
+            instr,
+        };
+
+        self.decode_regs.write(ClockCycle::SecondHalf, decode_regs);
+
+        // PC mutex
+        let pc = jump.unwrap_or(pc_ctrl.pc_plus4);
+        let fetch_regs = FetchRegs { pc };
+        self.fetch_regs.write(ClockCycle::SecondHalf, fetch_regs);
     }
 
-    pub fn into_option(self) -> Option<T> {
-        Option::from(self)
+    pub fn decode(&mut self) {
+        let DecodeRegs {
+            pc_ctrl,
+            mut err_ctrl,
+            instr,
+        } = self.decode_regs.read(ClockCycle::FirstHalf);
+        let decoder = self.decoder.write(ClockCycle::FirstHalf);
+
+        let mut issue_regs = IssueRegs {
+            pc_ctrl,
+            err_ctrl,
+            ..Default::default()
+        };
+        match decoder.decode(instr) {
+            DecodeResult::Ok(instr) => {
+                issue_regs = IssueRegs::from_instr(instr.as_ref(), pc_ctrl, err_ctrl);
+            }
+            DecodeResult::NoInstr => {}
+            DecodeResult::Err(instr) => {
+                err_ctrl.decode_error = Some(DecodeError::InvalidInstruction(instr));
+            }
+        };
+
+        self.issue_regs.write(ClockCycle::SecondHalf, issue_regs);
     }
 }
-
-impl<T> From<Option<T>> for DecodeOption<T> {
-    fn from(value: Option<T>) -> Self {
-        match value {
-            None => Self::None,
-            Some(value) => Self::Some(value),
-        }
-    }
-}
-
-impl<T> From<DecodeOption<T>> for Option<T> {
-    fn from(value: DecodeOption<T>) -> Self {
-        match value {
-            DecodeOption::None | DecodeOption::InvalidInstr(_) => None,
-            DecodeOption::Some(value) => Some(value),
-        }
-    }
-}
-
-//#endregion

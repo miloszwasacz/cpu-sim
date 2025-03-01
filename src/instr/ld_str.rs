@@ -1,9 +1,10 @@
-use super::decode::{ITypeFormat, STypeFormat};
-use super::stall::StallControl;
-use super::Immediate;
+use crate::components::cpu::alu::AluControl;
 use crate::components::cpu::reg::arf::ArchRegName;
+use crate::instr::decode::{ITypeFormat, STypeFormat};
+use crate::instr::execute::{AluSrcB, ExecUnit};
+use crate::instr::raw::RawInstr;
+use crate::instr::{Decode, Execute, Immediate, Issue, Writeback};
 
-use std::collections::HashSet;
 use std::fmt;
 use std::marker::PhantomData;
 
@@ -16,161 +17,184 @@ instr_mod!(sb);
 instr_mod!(sh);
 instr_mod!(sw);
 
+//#region Macros
+
+macro_rules! load_store_instr {
+    ($name:ident, Load<$size:ty>) => {
+        load_store_instr!($name, Load, $size);
+
+        impl crate::instr::MemoryAccess for $name {
+            fn mem_read(&self) -> Option<crate::instr::mem_access::MemRead> {
+                fn read(
+                    mem: &crate::components::memory::Memory,
+                    addr: crate::components::memory::Address,
+                ) -> crate::components::cpu::reg::RegData {
+                    let data: $size = crate::components::memory::MemoryAccess::get(mem, addr);
+                    data.into()
+                }
+                Some(read)
+            }
+
+            fn mem_write(&self) -> Option<crate::instr::mem_access::MemWrite> {
+                None
+            }
+        }
+    };
+    ($name:ident, Store<$size:ty>) => {
+        load_store_instr!($name, Store, $size);
+
+        impl crate::instr::MemoryAccess for $name {
+            fn mem_read(&self) -> Option<crate::instr::mem_access::MemRead> {
+                None
+            }
+
+            fn mem_write(&self) -> Option<crate::instr::mem_access::MemWrite> {
+                fn write(
+                    mem: &mut crate::components::memory::Memory,
+                    addr: crate::components::memory::Address,
+                    data: crate::components::cpu::reg::RegData,
+                ) {
+                    let data = data.i() as $size;
+                    crate::components::memory::MemoryAccess::set(mem, addr, data);
+                }
+
+                Some(write)
+            }
+        }
+    };
+    ($name:ident, $instr:ident, $size:ty) => {
+        #[derive(
+            Debug,
+            cpu_sim_derive::Display,
+            Clone,
+            Copy,
+            PartialEq,
+            Eq,
+            cpu_sim_derive::Decode,
+            cpu_sim_derive::Issue,
+            cpu_sim_derive::Writeback,
+            cpu_sim_derive::Instr,
+        )]
+        pub struct $name(crate::instr::ld_str::$instr::<$size>);
+
+        impl crate::instr::Execute for $name {
+            delegate::delegate! {
+                to self.0 {
+                    fn exec_unit(&self) -> crate::instr::execute::ExecUnit;
+                    fn alu_src_a(&self) -> crate::instr::execute::AluSrcA;
+                    fn alu_src_b(&self) -> crate::instr::execute::AluSrcB;
+                    fn alu_control(&self) -> crate::components::cpu::alu::AluControl;
+                    fn mask_jump_target(&self) -> bool;
+                }
+            }
+        }
+    };
+}
+use load_store_instr;
+
+macro_rules! delegate_decode {
+    ($instr:ident, $format:ident) => {
+        impl<T> Decode for $instr<T> {
+            fn decode(raw: RawInstr) -> Self {
+                Self($format::decode(raw), PhantomData)
+            }
+
+            delegate::delegate! {
+                to self.0 {
+                    fn rs1(&self) -> ArchRegName;
+                    fn rs2(&self) -> ArchRegName;
+                    fn rd(&self) -> ArchRegName;
+                    fn imm(&self) -> Immediate;
+                }
+            }
+        }
+    };
+}
+
+macro_rules! impl_issue {
+    ($instr:ident) => {
+        impl<T> Issue for $instr<T> {
+            fn branch(&self) -> crate::instr::issue::Branch {
+                crate::instr::issue::Branch::None
+            }
+        }
+    };
+}
+
+//#endregion
+
+//#region Load
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Load<T>(ITypeFormat, PhantomData<T>);
 
-impl<T> Load<T> {
-    pub fn dest(&self) -> ArchRegName {
-        self.0.rd
+delegate_decode!(Load, ITypeFormat);
+
+impl_issue!(Load);
+
+impl<T> Execute for Load<T> {
+    fn exec_unit(&self) -> ExecUnit {
+        ExecUnit::LoadAgu
     }
 
-    pub fn base(&self) -> ArchRegName {
-        self.0.rs1
+    fn alu_src_b(&self) -> AluSrcB {
+        AluSrcB::Imm
     }
 
-    pub fn offset(&self) -> Immediate {
-        self.0.imm
-    }
-}
-
-impl<T> From<ITypeFormat> for Load<T> {
-    fn from(value: ITypeFormat) -> Self {
-        Self(value, PhantomData)
+    fn alu_control(&self) -> AluControl {
+        AluControl::Add
     }
 }
 
-impl<T> StallControl for Load<T> {
-    fn read_regs(&self) -> HashSet<ArchRegName> {
-        self.0.read_regs()
-    }
-
-    fn write_reg(&self) -> Option<ArchRegName> {
-        self.0.write_reg()
+impl<T> Writeback for Load<T> {
+    fn reg_write(&self) -> bool {
+        true
     }
 }
 
 impl<T> fmt::Display for Load<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.dest().fmt(f)?;
-        write!(f, ", {}({})", self.offset(), self.base())
+        self.rd().fmt(f)?;
+        write!(f, ", {}({})", self.imm(), self.rs1())
     }
 }
 
-macro_rules! load_instr {
-    ($name:ident<$size:ty>) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub struct $name(pub(in crate::instr) crate::instr::ld_str::Load<$size>);
+//#endregion
 
-        impl crate::instr::Instr for $name {}
-
-        impl From<crate::instr::decode::ITypeFormat> for $name {
-            fn from(value: crate::instr::decode::ITypeFormat) -> Self {
-                Self(value.into())
-            }
-        }
-
-        crate::instr::impl_execute!($name, |&self, reg_file, _, _, load_agu, _| {
-            let base = reg_file.get(self.0.base());
-            let addr = load_agu.addr(base.get(), self.0.offset());
-            Ok(crate::instr::execute::ExecuteResult::LoadAgu(
-                self.0.dest(),
-                addr,
-            ))
-        });
-
-        impl crate::instr::mem_access::MemoryAccess for $name {
-            fn load(
-                &self,
-                mem: &crate::components::memory::Memory,
-                address: crate::components::memory::Address,
-            ) -> Result<
-                crate::components::cpu::reg::RegData,
-                crate::components::cpu::error::MemAccessError,
-            > {
-                use crate::components::memory::MemoryAccess;
-                let data: $size = mem.get(address);
-                Ok(data as crate::components::cpu::reg::RegData)
-            }
-        }
-    };
-}
-use load_instr;
+//#region Store
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Store<T>(STypeFormat, PhantomData<T>);
 
-impl<T> Store<T> {
-    pub fn base(&self) -> ArchRegName {
-        self.0.rs1
+delegate_decode!(Store, STypeFormat);
+
+impl_issue!(Store);
+
+impl<T> Execute for Store<T> {
+    fn exec_unit(&self) -> ExecUnit {
+        ExecUnit::StoreAgu
     }
 
-    pub fn src(&self) -> ArchRegName {
-        self.0.rs2
+    fn alu_src_b(&self) -> AluSrcB {
+        AluSrcB::Imm
     }
 
-    pub fn offset(&self) -> Immediate {
-        self.0.imm
-    }
-}
-
-impl<T> From<STypeFormat> for Store<T> {
-    fn from(value: STypeFormat) -> Self {
-        Self(value, PhantomData)
+    fn alu_control(&self) -> AluControl {
+        AluControl::Add
     }
 }
 
-impl<T> StallControl for Store<T> {
-    fn read_regs(&self) -> HashSet<ArchRegName> {
-        self.0.read_regs()
-    }
-
-    fn write_reg(&self) -> Option<ArchRegName> {
-        self.0.write_reg()
+impl<T> Writeback for Store<T> {
+    fn reg_write(&self) -> bool {
+        false
     }
 }
 
 impl<T> fmt::Display for Store<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.src().fmt(f)?;
-        write!(f, ", {}({})", self.offset(), self.base())
+        self.rs2().fmt(f)?;
+        write!(f, ", {}({})", self.imm(), self.rs1())
     }
 }
 
-macro_rules! store_instr {
-    ($name:ident<$size:ty>) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub struct $name(pub(in crate::instr) crate::instr::ld_str::Store<$size>);
-
-        impl crate::instr::Instr for $name {}
-
-        impl From<crate::instr::decode::STypeFormat> for $name {
-            fn from(value: crate::instr::decode::STypeFormat) -> Self {
-                Self(value.into())
-            }
-        }
-
-        crate::instr::impl_execute!($name, |&self, reg_file, _, _, _, store_agu| {
-            let src = reg_file.get(self.0.src());
-            let base = reg_file.get(self.0.base());
-            let addr = store_agu.addr(base.get(), self.0.offset());
-            Ok(crate::instr::execute::ExecuteResult::StoreAgu(
-                addr,
-                src.get(),
-            ))
-        });
-
-        impl crate::instr::mem_access::MemoryAccess for $name {
-            fn store(
-                &self,
-                mem: &mut crate::components::memory::Memory,
-                address: crate::components::memory::Address,
-                data: crate::components::cpu::reg::RegData,
-            ) -> Result<(), crate::components::cpu::error::MemAccessError> {
-                use crate::components::memory::MemoryAccess;
-                mem.set(address, data as $size);
-                Ok(())
-            }
-        }
-    };
-}
-use store_instr;
+//#endregion

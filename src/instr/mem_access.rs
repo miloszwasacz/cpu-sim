@@ -1,18 +1,10 @@
-use crate::components::cpu::error::MemAccessError;
 use crate::components::cpu::reg::RegData;
 use crate::components::memory::{Address, Memory};
 
-pub trait MemoryAccess {
-    fn load(&self, _mem: &Memory, _address: Address) -> Result<RegData, MemAccessError> {
-        Err(MemAccessError::InvalidLoad)
-    }
+pub type MemRead = fn(&Memory, Address) -> RegData;
+pub type MemWrite = fn(&mut Memory, Address, RegData);
 
-    fn store(
-        &self,
-        _mem: &mut Memory,
-        _address: Address,
-        _data: RegData,
-    ) -> Result<(), MemAccessError> {
-        Err(MemAccessError::InvalidStore)
-    }
+pub trait MemoryAccess {
+    fn mem_read(&self) -> Option<MemRead>;
+    fn mem_write(&self) -> Option<MemWrite>;
 }

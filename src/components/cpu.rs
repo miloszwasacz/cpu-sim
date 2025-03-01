@@ -1,64 +1,75 @@
-use self::circuit::Circuit;
-pub use self::exec_engine::agu::Agu;
-pub use self::exec_engine::alu::Alu;
-use self::exec_engine::{EnvTrap, ExecutionEngine};
+use self::error::Exception;
+use self::exec_engine::ExecutionEngine;
+pub use self::exec_engine::{agu, alu, branch};
 use self::front_end::FrontEnd;
+use self::hazard::HazardUnit;
 use self::mem_subsystem::MemorySubsystem;
 use self::reg::arf::ArchRegName;
-use self::reg::{RegData, RegFile, Register};
+use self::reg::RegFile;
 use super::memory::{Address, Memory};
 use super::Bus;
-use crate::instr::raw::RawInstrBits;
-use crate::instr::SyscallCode;
+use crate::instr::{EnvTrap, SyscallCode};
 use crate::os::Os;
 
-use std::cell::RefCell;
 use std::error::Error;
-use std::rc::Rc;
 
 mod circuit;
 pub mod error;
 mod exec_engine;
 mod front_end;
+mod hazard;
 mod mem_subsystem;
 pub mod reg;
 
-type Stall = bool;
+type Pc = Address;
 pub type ExitCode = i32;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CpuRun {
     Exit(ExitCode),
     Break,
 }
 
+enum TickResult {
+    None,
+    Trap(EnvTrap),
+    Err(Box<dyn Error>),
+    Halt,
+}
+
 // TODO Add diagnostics
 pub struct Cpu<'m> {
     os: Os,
-    pc: ProgramCounter,
     front_end: FrontEnd<'m>,
     exec_engine: ExecutionEngine,
     mem_subsystem: MemorySubsystem<'m>,
+    hazard_unit: HazardUnit,
+    exit: bool,
 }
 
 impl<'m> Cpu<'m> {
     pub fn new(mem_bus: Bus<'m, Memory>) -> Self {
         let os = Default::default();
-        let pc = Default::default();
         let front_end = FrontEnd::new(mem_bus);
-        let exec_engine = ExecutionEngine::new(front_end.decode_regs());
-        let mem_subsystem = MemorySubsystem::new(
+        let mut exec_engine = ExecutionEngine::new(front_end.issue_regs());
+        let mem_subsystem = MemorySubsystem::new(exec_engine.mem_access_regs(), mem_bus);
+        exec_engine.connect_writeback_regs(mem_subsystem.writeback_regs());
+        let hazard_unit = HazardUnit::new(
+            front_end.fetch_regs(),
+            front_end.decode_regs(),
+            front_end.issue_regs(),
             exec_engine.execute_regs(),
-            mem_bus,
-            exec_engine.writeback_regs(),
-            exec_engine.reg_file_write_regs(),
+            exec_engine.mem_access_regs(),
+            mem_subsystem.writeback_regs(),
         );
 
         Self {
             os,
-            pc,
             front_end,
             exec_engine,
             mem_subsystem,
+            hazard_unit,
+            exit: false,
         }
     }
 
@@ -67,183 +78,128 @@ impl<'m> Cpu<'m> {
     }
 
     pub(crate) fn set_entrypoint(&mut self, entrypoint: Address) {
-        self.pc.write(entrypoint);
-        self.pc.finish_cycle();
+        unsafe {
+            self.front_end.set_pc(entrypoint);
+        }
     }
 
     pub fn run(&mut self) -> Result<CpuRun, Box<dyn Error>> {
         loop {
-            let trap = self.tick()?;
-            match trap {
-                EnvTrap::None => {}
-                EnvTrap::Syscall(pc) => {
-                    if let Some(exit_code) = self.handle_syscall() {
-                        self.save_pc(pc);
-                        return Ok(CpuRun::Exit(exit_code));
+            match self.tick() {
+                TickResult::None => {}
+                TickResult::Trap(trap) => match trap {
+                    EnvTrap::Syscall => self.handle_syscall(),
+                    EnvTrap::Break => return Ok(CpuRun::Break),
+                    EnvTrap::Exception(ex) => {
+                        // TODO Exception handling
+                        return Err(Box::new(ex));
                     }
-                }
-                EnvTrap::Break(pc) => {
-                    self.save_pc(pc);
-                    return Ok(CpuRun::Break);
+                },
+                TickResult::Err(err) => return Err(err),
+                TickResult::Halt => {
+                    let reg_file = unsafe { self.exec_engine.int_reg_file() };
+                    let exit_code = reg_file.get(ArchRegName::A0).i();
+                    return Ok(CpuRun::Exit(exit_code));
                 }
             }
         }
     }
 
-    fn tick(&mut self) -> Result<EnvTrap, Box<dyn Error>> {
-        // The order is reversed to mimic parallelism
+    fn tick(&mut self) -> TickResult {
+        self.front_end.start_cycle();
+        self.exec_engine.start_cycle();
+        self.mem_subsystem.start_cycle();
+        self.hazard_unit.start_cycle();
+
+        // The order is reversed to allow in-place modification while mimicking parallelism
 
         // println!("Writeback");
-        let mem_wb_write_reg = self.exec_engine.mem_wb_write_reg();
-        self.exec_engine.writeback().map_err(Box::new)?;
+        let err = self.exec_engine.writeback();
 
         // println!("Memory Access");
-        let ex_mem_write_reg = self.mem_subsystem.ex_mem_write_reg();
-        let jump_target = self.mem_subsystem.memory_access()?;
+        self.mem_subsystem.memory_access();
 
-        // println!("Execute");
-        let id_ex_write_reg = self.exec_engine.id_ex_write_reg();
-        let trap = self.exec_engine.execute().map_err(Box::new)?;
+        // println!("Execute")
+        let (jump, env_trap) = self.exec_engine.execute(&self.hazard_unit);
+
+        // println!("Issue")
+        self.exec_engine.issue(&mut self.hazard_unit);
 
         // println!("Decode");
-        let stall = self
-            .front_end
-            .decode(id_ex_write_reg, ex_mem_write_reg, mem_wb_write_reg)
-            .map_err(Box::new)?;
+        self.front_end.decode();
 
-        // println!("Fetch");
-        self.front_end.fetch(&mut self.pc, stall).map(Box::new)?;
+        // println!("Fetch")
+        self.front_end.fetch(jump);
 
-        // println!();
-        self.exec_engine.finish_writeback_cycle();
-        self.mem_subsystem.finish_memory_access_cycle();
-        self.exec_engine.finish_execute_cycle();
-        self.front_end.finish_decode_cycle();
-        self.front_end.finish_fetch_cycle();
-
-        if let Some(jump_target) = jump_target {
-            self.pc.write(jump_target);
-            self.exec_engine.flush();
-            self.front_end.flush();
+        let halt = err.jump_to_self && self.exit;
+        let result = err
+            .try_into()
+            .map(|ex: Option<Exception>| ex.map(Into::into).or(env_trap));
+        match result {
+            Ok(Some(trap)) => TickResult::Trap(trap),
+            Ok(None) if halt => TickResult::Halt,
+            Ok(None) => TickResult::None,
+            Err(err) => TickResult::Err(err),
         }
-
-        self.pc.finish_cycle();
-        Ok(trap)
     }
 
-    fn save_pc(&mut self, pc: ProgramCounter) {
-        self.pc = pc;
-        self.pc.advance();
-        self.pc.finish_cycle();
-    }
-
-    fn handle_syscall(&mut self) -> Option<ExitCode> {
+    fn handle_syscall(&mut self) {
         macro_rules! os_call {
-            ($os:expr, $mem:expr, |os| os.$( $call:tt )+) => {
-                match $os.$( $call )+ {
-                    Ok(r) => r,
-                    Err((r, errno)) => {
-                        $os.set_errno($mem, errno);
-                        r
-                    }
-                }
-            };
-        }
+                ($os:expr, $mem:expr, |os| os.$( $call:tt )+) => {
+                    crate::components::cpu::reg::RegData::signed(match $os.$( $call )+ {
+                        Ok(r) => r,
+                        Err((r, errno)) => {
+                            $os.set_errno($mem, errno);
+                            r
+                        }
+                    })
+                };
+            }
 
         let reg_file = unsafe { self.exec_engine.int_reg_file() };
         let mem = unsafe { &mut self.mem_subsystem.mem() };
         // TODO Log unknown syscalls instead of panicking
-        let syscall = SyscallCode::try_from(reg_file.get(ArchRegName::A7).get()).unwrap();
+        let syscall = SyscallCode::try_from(reg_file.get(ArchRegName::A7)).unwrap();
         match syscall {
-            // TODO Refactor exiting -- on ECALL, mark as ready to exit, and stop only when there is a jump to itself
-            SyscallCode::Exit => return Some(reg_file.get(ArchRegName::A0).get()),
+            SyscallCode::Exit => self.exit = true,
             SyscallCode::Close => {
-                let fd = reg_file.get(ArchRegName::A0).get();
+                let fd = reg_file.get(ArchRegName::A0).i();
                 let result = os_call!(self.os, mem, |os| os.close(fd));
                 reg_file.set(ArchRegName::A0, result);
             }
             SyscallCode::Fstat => {
-                let fd = reg_file.get(ArchRegName::A0).get();
-                let statbuf = reg_file.get(ArchRegName::A1).get_unsigned();
+                let fd = reg_file.get(ArchRegName::A0).i();
+                let statbuf = reg_file.get(ArchRegName::A1).addr();
                 let result = os_call!(self.os, mem, |os| os.fstat(mem, fd, statbuf));
                 reg_file.set(ArchRegName::A0, result);
             }
             SyscallCode::Lseek => {
-                let fd = reg_file.get(ArchRegName::A0).get();
-                let offset = reg_file.get(ArchRegName::A1).get();
-                let whence = reg_file.get(ArchRegName::A2).get();
+                let fd = reg_file.get(ArchRegName::A0).i();
+                let offset = reg_file.get(ArchRegName::A1).i();
+                let whence = reg_file.get(ArchRegName::A2).i();
                 let result = os_call!(self.os, mem, |os| os.lseek(fd, offset, whence));
                 reg_file.set(ArchRegName::A0, result);
             }
             SyscallCode::Read => {
-                let fd = reg_file.get(ArchRegName::A0).get();
-                let buf = reg_file.get(ArchRegName::A1).get() as Address;
-                let count = reg_file.get(ArchRegName::A2).get_unsigned();
+                let fd = reg_file.get(ArchRegName::A0).i();
+                let buf = reg_file.get(ArchRegName::A1).addr();
+                let count = reg_file.get(ArchRegName::A2).u();
                 let result = os_call!(self.os, mem, |os| os.read(mem, fd, buf, count));
                 reg_file.set(ArchRegName::A0, result);
             }
             SyscallCode::Sbrk => {
-                let incr = reg_file.get(ArchRegName::A0).get();
-                let sp = reg_file.get(ArchRegName::SP).get_unsigned();
+                let incr = reg_file.get(ArchRegName::A0).i();
+                let sp = reg_file.get(ArchRegName::SP).addr();
                 let result = os_call!(self.os, mem, |os| os.sbrk(sp, incr));
                 reg_file.set(ArchRegName::A0, result);
             }
             SyscallCode::Write => {
-                let fd = reg_file.get(ArchRegName::A0).get();
-                let buf = reg_file.get(ArchRegName::A1).get_unsigned();
-                let count = reg_file.get(ArchRegName::A2).get_unsigned();
+                let fd = reg_file.get(ArchRegName::A0).i();
+                let buf = reg_file.get(ArchRegName::A1).addr();
+                let count = reg_file.get(ArchRegName::A2).u();
                 let result = os_call!(self.os, mem, |os| os.write(mem, fd, buf, count));
                 reg_file.set(ArchRegName::A0, result);
             }
         }
-        None
     }
 }
-
-//#region PC
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct ProgramCounter {
-    current: Register,
-    next: Register,
-}
-
-impl ProgramCounter {
-    pub fn read(&self) -> Address {
-        self.current.get() as Address
-    }
-
-    pub fn read_next(&self) -> Address {
-        self.next.get() as Address
-    }
-
-    fn advance(&mut self) {
-        let current = self.current.get();
-        let next = current + size_of::<RawInstrBits>() as RegData;
-        self.next.set(next);
-    }
-
-    pub fn write(&mut self, addr: Address) {
-        self.next.set(addr as RegData);
-    }
-
-    fn finish_cycle(&mut self) {
-        self.current = self.next;
-    }
-}
-
-//#endregion
-
-//#region Pipeline registers
-
-type PipelineRegs<T> = Rc<RefCell<Circuit<T>>>;
-
-fn make_pipeline_regs<T: Default>() -> PipelineRegs<T> {
-    Rc::new(RefCell::new(Circuit::new(Default::default())))
-}
-
-fn flush_pipeline_regs<T: Default>(regs: &mut PipelineRegs<T>) {
-    unsafe { *regs.borrow_mut().inner_mut() = Default::default() }
-}
-
-//#endregion

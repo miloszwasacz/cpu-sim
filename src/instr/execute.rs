@@ -1,27 +1,46 @@
-use crate::components::cpu::error::ExecuteError;
-use crate::components::cpu::reg::arf::ArchRegName;
-use crate::components::cpu::reg::{RegData, RegFile};
-use crate::components::cpu::{Agu, Alu, ProgramCounter};
-use crate::components::memory::Address;
+use super::EnvTrap;
+use crate::components::cpu::alu::AluControl;
 
 pub trait Execute {
-    fn execute(
-        &self,
-        reg_file: &dyn RegFile<Index = ArchRegName>,
-        pc: ProgramCounter,
-        alu: &mut Alu,
-        load_agu: &mut Agu,
-        store_agu: &mut Agu,
-    ) -> Result<ExecuteResult, ExecuteError>;
+    fn exec_unit(&self) -> ExecUnit;
+
+    // ALU
+    fn alu_src_a(&self) -> AluSrcA {
+        Default::default()
+    }
+    fn alu_src_b(&self) -> AluSrcB;
+    fn alu_control(&self) -> AluControl;
+
+    // Jump/Branch
+    fn mask_jump_target(&self) -> bool {
+        false
+    }
+
+    // Env
+    fn env_trap(&self) -> Option<EnvTrap> {
+        None
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExecuteResult {
-    Alu(ArchRegName, RegData),
-    Jump(Address, ArchRegName, Address),
-    Branch(Option<Address>),
-    LoadAgu(ArchRegName, Address),
-    StoreAgu(Address, RegData),
-    Ecall,
-    Ebreak,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ExecUnit {
+    #[default]
+    Alu,
+    LoadAgu,
+    StoreAgu,
+    Branch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AluSrcA {
+    #[default]
+    Reg,
+    Pc,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AluSrcB {
+    #[default]
+    Reg,
+    Imm,
 }

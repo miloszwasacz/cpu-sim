@@ -5,121 +5,151 @@ use std::cell::Cell;
 pub enum ClockCycle {
     FirstHalf,
     SecondHalf,
-    Full,
 }
 
+#[cfg(debug_assertions)]
 #[derive(Debug)]
 pub struct Circuit<T> {
     /// Whether the element is being read during the first half of the clock cycle.
-    #[cfg(debug_assertions)]
     read1: Cell<bool>,
     /// Whether the element is being read during the second half of the clock cycle.
-    #[cfg(debug_assertions)]
     read2: Cell<bool>,
     /// Whether the element is being written during the first half of the clock cycle.
-    #[cfg(debug_assertions)]
-    write1: bool,
+    write1: Cell<bool>,
     /// Whether the element is being written during the second half of the clock cycle.
-    #[cfg(debug_assertions)]
-    write2: bool,
+    write2: Cell<bool>,
+    /// A part of the CPU.
+    element: T,
+}
+
+#[cfg(not(debug_assertions))]
+#[derive(Debug)]
+pub struct Circuit<T> {
     /// A part of the CPU.
     element: T,
 }
 
 impl<T> Circuit<T> {
+    #[cfg(debug_assertions)]
     pub fn new(element: T) -> Self {
         Self {
-            #[cfg(debug_assertions)]
-            read1: Cell::new(Default::default()),
-            #[cfg(debug_assertions)]
-            read2: Cell::new(Default::default()),
-            #[cfg(debug_assertions)]
+            read1: Default::default(),
+            read2: Default::default(),
             write1: Default::default(),
-            #[cfg(debug_assertions)]
             write2: Default::default(),
             element,
         }
     }
 
+    #[cfg(not(debug_assertions))]
+    pub fn new(element: T) -> Self {
+        Self { element }
+    }
+
+    #[inline]
     pub fn read(&self, cycle_half: ClockCycle) -> &T {
         #[cfg(debug_assertions)]
-        {
-            let has_error = match cycle_half {
-                ClockCycle::FirstHalf => self.write1,
-                ClockCycle::SecondHalf => self.write2,
-                ClockCycle::Full => self.write1 || self.write2,
-            };
-            if has_error {
-                panic!(
-                    "cannot read: {} is being written",
-                    type_name_of_val(&self.element)
-                );
-            }
-
-            match cycle_half {
-                ClockCycle::FirstHalf => self.read1.set(true),
-                ClockCycle::SecondHalf => self.read2.set(true),
-                ClockCycle::Full => {
-                    self.read1.set(true);
-                    self.read2.set(true);
-                }
-            }
-        }
+        self.read_check(cycle_half);
         &self.element
     }
 
+    #[inline]
     pub fn write(&mut self, cycle_half: ClockCycle) -> &mut T {
         #[cfg(debug_assertions)]
-        {
-            let has_read_error = match cycle_half {
-                ClockCycle::FirstHalf => self.read1.get(),
-                ClockCycle::SecondHalf => self.read2.get(),
-                ClockCycle::Full => self.read1.get() || self.read2.get(),
-            };
-            if has_read_error {
-                panic!(
-                    "cannot write: {} is being read",
-                    type_name_of_val(&self.element)
-                );
-            }
-            let has_write_error = match cycle_half {
-                ClockCycle::FirstHalf => self.write1,
-                ClockCycle::SecondHalf => self.write2,
-                ClockCycle::Full => self.write1 || self.write2,
-            };
-            if has_write_error {
-                panic!(
-                    "cannot write: {} is being written",
-                    type_name_of_val(&self.element)
-                );
-            }
-
-            match cycle_half {
-                ClockCycle::FirstHalf => self.write1 = true,
-                ClockCycle::SecondHalf => self.write2 = true,
-                ClockCycle::Full => {
-                    self.write1 = true;
-                    self.write2 = true;
-                }
-            }
-        }
+        self.write_check(cycle_half);
         &mut self.element
     }
 
-    pub fn reset(&mut self) {
+    #[inline]
+    pub fn reset(&self) {
         #[cfg(debug_assertions)]
         {
-            self.read1.set(Default::default());
-            self.read2.set(Default::default());
-            self.write1 = Default::default();
-            self.write2 = Default::default();
+            self.read1.take();
+            self.read2.take();
+            self.write1.take();
+            self.write2.take();
         }
     }
 
+    #[inline(always)]
     pub unsafe fn inner_mut(&mut self) -> &mut T {
         &mut self.element
     }
 }
+
+impl<T> Circuit<Cell<T>> {
+    #[inline]
+    pub fn read_cell(&self, cycle_half: ClockCycle) -> T
+    where
+        T: Copy,
+    {
+        #[cfg(debug_assertions)]
+        self.read_check(cycle_half);
+        self.element.get()
+    }
+
+    #[inline]
+    pub fn write_cell(&self, cycle_half: ClockCycle, element: T) {
+        #[cfg(debug_assertions)]
+        self.write_check(cycle_half);
+        self.element.set(element)
+    }
+}
+
+//#region Checks
+
+#[cfg(debug_assertions)]
+impl<T> Circuit<T> {
+    fn read_check(&self, cycle_half: ClockCycle) {
+        if self.writes(cycle_half) {
+            panic!(
+                "cannot read: {} is being written",
+                type_name_of_val(&self.element)
+            );
+        }
+
+        match cycle_half {
+            ClockCycle::FirstHalf => self.read1.set(true),
+            ClockCycle::SecondHalf => self.read2.set(true),
+        }
+    }
+
+    fn write_check(&self, cycle_half: ClockCycle) {
+        if self.reads(cycle_half) {
+            panic!(
+                "cannot write: {} is being read",
+                type_name_of_val(&self.element)
+            );
+        }
+        if self.writes(cycle_half) {
+            panic!(
+                "cannot write: {} is being written",
+                type_name_of_val(&self.element)
+            );
+        }
+
+        match cycle_half {
+            ClockCycle::FirstHalf => self.write1.set(true),
+            ClockCycle::SecondHalf => self.write2.set(true),
+        }
+    }
+
+    fn reads(&self, cycle_half: ClockCycle) -> bool {
+        match cycle_half {
+            ClockCycle::FirstHalf => self.read1.get(),
+            ClockCycle::SecondHalf => self.read2.get(),
+        }
+    }
+
+    fn writes(&self, cycle_half: ClockCycle) -> bool {
+        match cycle_half {
+            ClockCycle::FirstHalf => self.write1.get(),
+            ClockCycle::SecondHalf => self.write2.get(),
+        }
+    }
+}
+
+//#endregion
 
 impl<T: Default> Default for Circuit<T> {
     fn default() -> Self {

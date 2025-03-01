@@ -1,3 +1,3 @@
-use super::load_instr;
+use super::load_store_instr;
 
-load_instr!(Lbu<u8>);
+load_store_instr!(Lbu, Load<u8>);

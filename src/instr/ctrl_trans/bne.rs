@@ -1,5 +1,3 @@
-use super::{cond_branch, impl_branch_execute};
+use super::cond_branch;
 
-cond_branch!(Bne);
-
-impl_branch_execute!(Bne, ne);
+cond_branch!(Bne, Ne);

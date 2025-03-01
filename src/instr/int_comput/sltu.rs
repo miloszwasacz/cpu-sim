@@ -1,3 +1,3 @@
-use super::int_reg_reg_op;
+use super::int_comput_instr;
 
-int_reg_reg_op!(Sltu, sltu);
+int_comput_instr!(Sltu, Reg, Sltu);

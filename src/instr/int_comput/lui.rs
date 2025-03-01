@@ -1,21 +1,25 @@
-use super::int_upper_imm_instr;
-use crate::components::cpu::error::ExecuteError;
-use crate::components::cpu::reg::arf::ArchRegName;
-use crate::components::cpu::reg::RegFile;
-use crate::components::cpu::{Agu, Alu, ProgramCounter};
-use crate::instr::execute::{Execute, ExecuteResult};
+use crate::components::cpu::alu::AluControl;
+use crate::instr::decode::UTypeFormat;
+use crate::instr::execute::{AluSrcB, ExecUnit};
+use crate::instr::Execute;
 
-int_upper_imm_instr!(Lui);
+use cpu_sim_derive::{Decode, Display, Instr, Issue, MemoryAccess, Writeback};
+
+#[derive(
+    Debug, Display, Clone, Copy, PartialEq, Eq, Decode, Issue, MemoryAccess, Writeback, Instr,
+)]
+pub struct Lui(UTypeFormat);
 
 impl Execute for Lui {
-    fn execute(
-        &self,
-        _: &dyn RegFile<Index = ArchRegName>,
-        _: ProgramCounter,
-        _: &mut Alu,
-        _: &mut Agu,
-        _: &mut Agu,
-    ) -> Result<ExecuteResult, ExecuteError> {
-        Ok(ExecuteResult::Alu(self.dest(), self.imm()))
+    fn exec_unit(&self) -> ExecUnit {
+        ExecUnit::Alu
+    }
+
+    fn alu_src_b(&self) -> AluSrcB {
+        AluSrcB::Imm
+    }
+
+    fn alu_control(&self) -> AluControl {
+        AluControl::Add
     }
 }

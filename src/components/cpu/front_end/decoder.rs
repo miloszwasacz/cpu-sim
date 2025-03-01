@@ -1,8 +1,5 @@
-use super::DecodeOption;
-use crate::instr::raw::RawInstr;
+use crate::instr::raw::{RawInstr, RawInstrBits};
 use crate::instr::Instr;
-
-use std::rc::Rc;
 
 pub struct Decoder(());
 
@@ -11,10 +8,22 @@ impl Decoder {
         Self(())
     }
 
-    pub fn decode(&self, instr: RawInstr) -> DecodeOption<Rc<dyn Instr>> {
-        instr
-            .decode()
-            .map(DecodeOption::Some)
-            .unwrap_or_else(DecodeOption::InvalidInstr)
+    pub fn decode(&mut self, instr: RawInstrBits) -> DecodeResult {
+        if instr == 0 {
+            return DecodeResult::NoInstr;
+        }
+
+        match RawInstr::new(instr).decode() {
+            Ok(instr) => DecodeResult::Ok(instr),
+            Err(instr) => DecodeResult::Err(instr),
+        }
     }
+}
+
+#[derive(Debug, Default)]
+pub enum DecodeResult {
+    #[default]
+    NoInstr,
+    Ok(Box<dyn Instr>),
+    Err(RawInstr),
 }
