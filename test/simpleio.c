@@ -72,5 +72,3 @@ int puts(const char *s) {
     
     return 1;
 }
-
-//#pragma GCC diagnostic pop

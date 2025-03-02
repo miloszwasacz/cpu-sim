@@ -1,4 +1,5 @@
 use super::circuit::ClockCycle;
+use super::exec_engine::ExecutionEngine;
 use super::reg::arf::ArchRegName;
 use super::reg::pipeline::{
     DecodeRegs, ExecuteControl, ExecuteRegs, FetchRegs, IssueControl, IssueRegs, MemAccessRegs,
@@ -51,7 +52,9 @@ impl HazardUnit {
             decode_regs: self.decode_regs.read(ClockCycle::FirstHalf),
             issue_regs: self.issue_regs.read(ClockCycle::FirstHalf),
             execute_regs: self.execute_regs.read(ClockCycle::FirstHalf),
+            execute_out: None,
             mem_access_regs: self.mem_access_regs.read(ClockCycle::FirstHalf),
+            mem_access_out: None,
             writeback_regs: self.writeback_regs.read(ClockCycle::FirstHalf),
         };
 
@@ -90,31 +93,23 @@ impl HazardUnit {
 
         let load_stall = {
             // Operand for load in Execute stage
-            let stall_e = reg_write_e
-                // TODO Uncomment when forwarding is implemented
-                // && mem_to_reg_e
-                && (reg_eq_non_zero(rs1_i, write_reg_e)
-                    || reg_eq_non_zero(rs2_i, write_reg_e));
+            let stall_e = mem_to_reg_e
+                && (reg_eq_non_zero(rs1_i, write_reg_e) || reg_eq_non_zero(rs2_i, write_reg_e))
+                && reg_write_e;
 
             // Operand for load in will be loaded from memory
-            let stall_m = reg_write_m
-                // TODO Uncomment when forwarding is implemented
-                // && mem_to_reg_m
-                && (reg_eq_non_zero(rs1_i, write_reg_m)
-                    || reg_eq_non_zero(rs2_i, write_reg_m));
+            let stall_m = mem_to_reg_m
+                && (reg_eq_non_zero(rs1_i, write_reg_m) || reg_eq_non_zero(rs2_i, write_reg_m))
+                && reg_write_m;
 
             stall_e || stall_m
         };
         let branch_stall = {
-            // Operand for branch in Execute stage
-            let branch_stall_e = reg_write_e
-                && (reg_eq_non_zero(write_reg_e, rs1_i) || reg_eq_non_zero(write_reg_e, rs2_i));
-
-            // Operand for branch will be loaded from memory
-            let branch_stall_m = mem_to_reg_m
-                && (reg_eq_non_zero(write_reg_m, rs1_i) || reg_eq_non_zero(write_reg_m, rs2_i));
-
-            branch_i && (branch_stall_e || branch_stall_m)
+            // Operand for branch in Execute stage will be loaded from memory
+            branch_i
+                && mem_to_reg_e
+                && (reg_eq_non_zero(rs1_i, write_reg_e) || reg_eq_non_zero(rs2_i, write_reg_e))
+                && reg_write_e
         };
         let env_stall = {
             // Instruction in Execute stage modifies registers
@@ -140,7 +135,16 @@ impl HazardUnit {
         self.execute_regs.clr(flush_e, ClockCycle::SecondHalf);
     }
 
-    pub fn forward_issue(
+    pub fn execute_forward_out(&mut self, regs: MemAccessRegs) {
+        self.tick_state.execute_out = Some(regs);
+    }
+
+    pub fn mem_access_forward_out(&mut self, regs: WritebackRegs) {
+        self.tick_state.mem_access_out = Some(regs);
+    }
+
+    //noinspection DuplicatedCode
+    pub fn issue_forward_in(
         &self,
         (rs1, src1): (ArchRegName, RegData),
         (rs2, src2): (ArchRegName, RegData),
@@ -148,21 +152,39 @@ impl HazardUnit {
         let MemAccessRegs {
             wb_ctrl:
                 WritebackControl {
+                    mem_to_reg: mem_to_reg_e,
+                    reg_write: reg_write_e,
+                },
+            alu_out: alu_out_e,
+            write_reg: write_reg_e,
+            ..
+        } = self
+            .tick_state
+            .execute_out
+            .expect("the Execute stage should be performed before the Issue stage");
+        let WritebackRegs {
+            wb_ctrl:
+                WritebackControl {
+                    mem_to_reg: mem_to_reg_m,
                     reg_write: reg_write_m,
-                    ..
                 },
             alu_out: alu_out_m,
+            read_data: read_data_m,
             write_reg: write_reg_m,
             ..
-        } = self.tick_state.mem_access_regs;
+        } = self
+            .tick_state
+            .mem_access_out
+            .expect("the Memory Access stage should be performed before the Issue stage");
 
         let forward_single = |r: ArchRegName, src: RegData| {
-            // if Self::reg_eq_non_zero(r, write_reg_m) && reg_write_m {
-            //     todo!("Forwarding not implemented");
-            //     alu_out_m
-            // } else {
-            src
-            // }
+            if reg_eq_non_zero(r, write_reg_e) && reg_write_e && !mem_to_reg_e {
+                alu_out_e
+            } else if reg_eq_non_zero(r, write_reg_m) && reg_write_m {
+                ExecutionEngine::writeback_mutex(mem_to_reg_m, alu_out_m, read_data_m)
+            } else {
+                src
+            }
         };
 
         let src_a = forward_single(rs1, src1);
@@ -170,7 +192,8 @@ impl HazardUnit {
         (src_a, src_b)
     }
 
-    pub fn forward_execute(
+    //noinspection DuplicatedCode
+    pub fn execute_forward_in(
         &self,
         (rs1, src1): (ArchRegName, RegData),
         (rs2, src2): (ArchRegName, RegData),
@@ -178,8 +201,8 @@ impl HazardUnit {
         let MemAccessRegs {
             wb_ctrl:
                 WritebackControl {
+                    mem_to_reg: mem_to_reg_m,
                     reg_write: reg_write_m,
-                    ..
                 },
             alu_out: alu_out_m,
             write_reg: write_reg_m,
@@ -198,16 +221,10 @@ impl HazardUnit {
         } = self.tick_state.writeback_regs;
 
         let forward_single = |r: ArchRegName, src: RegData| {
-            if reg_eq_non_zero(r, write_reg_m) && reg_write_m {
-                todo!("Forwarding not implemented");
+            if reg_eq_non_zero(r, write_reg_m) && reg_write_m && !mem_to_reg_m {
                 alu_out_m
             } else if reg_eq_non_zero(r, write_reg_w) && reg_write_w {
-                todo!("Forwarding not implemented");
-                if mem_to_reg_w {
-                    read_data_w
-                } else {
-                    alu_out_w
-                }
+                ExecutionEngine::writeback_mutex(mem_to_reg_w, alu_out_w, read_data_w)
             } else {
                 src
             }
@@ -235,6 +252,8 @@ struct TickState {
     decode_regs: DecodeRegs,
     issue_regs: IssueRegs,
     execute_regs: ExecuteRegs,
+    execute_out: Option<MemAccessRegs>,
     mem_access_regs: MemAccessRegs,
+    mem_access_out: Option<WritebackRegs>,
     writeback_regs: WritebackRegs,
 }

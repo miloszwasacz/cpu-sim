@@ -46,6 +46,13 @@ impl<T: Default> PipelineRegs<T> {
         self.0.enabled.set(en);
     }
 
+    /// Sets the Clear (`CLR`) signal
+    pub fn clr(&self, clr: bool, clock_half: ClockCycle) {
+        if clr {
+            self.0.cleared.set(Some(clock_half));
+        }
+    }
+
     pub fn read(&self, clock_half: ClockCycle) -> T
     where
         T: Copy,
@@ -78,13 +85,6 @@ impl<T: Default> PipelineRegs<T> {
         self.0.enabled.set(true);
         self.0.written.set(None);
         self.0.cleared.set(None);
-    }
-
-    /// Sets the Clear (`CLR`) signal
-    pub fn clr(&self, clr: bool, clock_half: ClockCycle) {
-        if clr {
-            self.0.cleared.set(Some(clock_half));
-        }
     }
 }
 

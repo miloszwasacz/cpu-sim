@@ -117,10 +117,10 @@ impl<'m> Cpu<'m> {
         let err = self.exec_engine.writeback();
 
         // println!("Memory Access");
-        self.mem_subsystem.memory_access();
+        self.mem_subsystem.memory_access(&mut self.hazard_unit);
 
         // println!("Execute")
-        let (jump, env_trap) = self.exec_engine.execute(&self.hazard_unit);
+        let (jump, env_trap) = self.exec_engine.execute(&mut self.hazard_unit);
 
         // println!("Issue")
         self.exec_engine.issue(&mut self.hazard_unit);

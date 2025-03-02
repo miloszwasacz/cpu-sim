@@ -1,4 +1,5 @@
 use super::circuit::{Circuit, ClockCycle};
+use super::hazard::HazardUnit;
 use super::reg::pipeline::{MemAccessControl, MemAccessRegs, PipelineRegs, WritebackRegs};
 use crate::components::memory::Memory;
 use crate::components::Bus;
@@ -40,7 +41,7 @@ impl<'m> MemorySubsystem<'m> {
         self.writeback_regs.reset();
     }
 
-    pub fn memory_access(&mut self) {
+    pub fn memory_access(&mut self, hazard_unit: &mut HazardUnit) {
         let MemAccessRegs {
             mem_ctrl,
             wb_ctrl,
@@ -76,6 +77,7 @@ impl<'m> MemorySubsystem<'m> {
             write_reg,
         };
 
+        hazard_unit.mem_access_forward_out(writeback_regs);
         self.writeback_regs
             .write(ClockCycle::SecondHalf, writeback_regs);
     }

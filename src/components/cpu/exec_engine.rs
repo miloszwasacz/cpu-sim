@@ -112,7 +112,7 @@ impl ExecutionEngine {
 
         let src1 = (rs1, int_reg_file.get(rs1));
         let src2 = (rs2, int_reg_file.get(rs2));
-        let (br_src1, br_src2) = hazard_unit.forward_issue(src1, src2);
+        let (br_src1, br_src2) = hazard_unit.issue_forward_in(src1, src2);
         ex_ctrl.jump = branch.jumps(br_src1, br_src2);
         let write_reg = rd;
 
@@ -136,7 +136,7 @@ impl ExecutionEngine {
         }
     }
 
-    pub fn execute(&mut self, hazard_unit: &HazardUnit) -> (Jump, Option<EnvTrap>) {
+    pub fn execute(&mut self, hazard_unit: &mut HazardUnit) -> (Jump, Option<EnvTrap>) {
         let ExecuteRegs {
             pc_ctrl,
             ex_ctrl,
@@ -157,7 +157,7 @@ impl ExecutionEngine {
             mask_jump_target,
             env_trap,
         } = ex_ctrl;
-        let (src1, src2) = hazard_unit.forward_execute(src1, src2);
+        let (src1, src2) = hazard_unit.execute_forward_in(src1, src2);
 
         let mut jump_target = None;
         let alu_out = match exec_unit {
@@ -216,6 +216,7 @@ impl ExecutionEngine {
             write_reg,
         };
 
+        hazard_unit.execute_forward_out(mem_access_regs);
         self.mem_access_regs
             .write(ClockCycle::SecondHalf, mem_access_regs);
 
@@ -237,11 +238,23 @@ impl ExecutionEngine {
         } = wb_ctrl;
         let int_reg_file = self.int_reg_file.write(ClockCycle::FirstHalf);
 
-        let data = if mem_to_reg { read_data } else { alu_out };
+        let data = Self::writeback_mutex(mem_to_reg, alu_out, read_data);
         if reg_write {
             int_reg_file.set(write_reg, data);
         }
 
         err_ctrl
+    }
+
+    pub(super) fn writeback_mutex(
+        mem_to_reg: bool,
+        alu_out: RegData,
+        read_data: RegData,
+    ) -> RegData {
+        if mem_to_reg {
+            read_data
+        } else {
+            alu_out
+        }
     }
 }
