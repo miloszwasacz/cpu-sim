@@ -1,5 +1,5 @@
 #include<stdlib.h>
-#include "simpleio.h"
+#include "bareio.h"
 
 int fputc(int c, int fd) {
     unsigned char buf[1];
@@ -15,10 +15,26 @@ int putchar(int c) {
     return fputc(c, STDOUT);
 }
 
-//TODO Implement this when division and remainder are supported
-//void fputi(int i, int fd) {
-//
-//}
+int fputi(int i, int fd) {
+    int l = i;
+    unsigned int len = i == 0 ? 2 : 1;
+    while (l > 0) {
+        len++;
+        l /= 10;
+    }
+    char *text = malloc(len * sizeof(char));
+    text[len - 1] = '\0';
+    for (int j = len - 2; j >= 0; j--) {
+        int k = i % 10;
+        text[j] = k + '0';
+        i /= 10;
+    }
+
+    if (fputs(text, fd) == EOF)
+        return EOF;
+
+    return 1;
+}
 
 int fputix(int i, int fd) {
     const unsigned int len = 2 + 8 + 1;
@@ -72,3 +88,5 @@ int puts(const char *s) {
     
     return 1;
 }
+
+//#pragma GCC diagnostic pop

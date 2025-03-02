@@ -1,9 +1,9 @@
 FROM runtimeverificationinc/riscv-gnu-toolchain:ubuntu-jammy-2024.04.12
 
-VOLUME ["/app"]
+VOLUME ["/build"]
 
 RUN apt-get update && apt-get install -y nano
 
-WORKDIR /app
+WORKDIR /build
 
 CMD ["/bin/bash"]

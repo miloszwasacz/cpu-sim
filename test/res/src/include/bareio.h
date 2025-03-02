@@ -15,8 +15,7 @@ int write(int fd, char *buf, int count);
 int fputc(int c, int fd);
 int putchar(int c);
 
-//TODO Implement this when division and remainder are supported
-//void fputi(int i, int fd);
+int fputi(int i, int fd);
 int fputix(int i, int fd);
 int fputib(int i, int fd);
 

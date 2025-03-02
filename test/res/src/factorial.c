@@ -1,4 +1,4 @@
-#include "simpleio.h"
+#include "bareio.h"
 
 unsigned int factorial(unsigned int k) {
     if (k <= 1)
@@ -9,6 +9,6 @@ unsigned int factorial(unsigned int k) {
 
 int main() {
     unsigned int fac = factorial(12);
-    fputix(fac, STDOUT);
+    fputi(fac, STDOUT);
     putchar('\n');
 }

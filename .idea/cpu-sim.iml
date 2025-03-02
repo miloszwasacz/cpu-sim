@@ -8,6 +8,8 @@
       <sourceFolder url="file://$MODULE_DIR$/crates/derive/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/build/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
+      <excludeFolder url="file://$MODULE_DIR$/test/res/bin" />
+      <excludeFolder url="file://$MODULE_DIR$/test/res/obj" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

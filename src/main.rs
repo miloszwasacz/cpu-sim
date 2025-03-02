@@ -4,7 +4,7 @@ use cpu_sim::os::loader::Loader;
 use std::cell::RefCell;
 
 fn main() {
-    const FILE: &str = "test/bubble_sort.bin";
+    const FILE: &str = "test/res/bin/bubble_sort";
 
     let mem = RefCell::new(Memory::new());
     let mut cpu = Cpu::new(&mem);
