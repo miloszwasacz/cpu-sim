@@ -9,6 +9,6 @@ unsigned int factorial(unsigned int k) {
 
 int main() {
     unsigned int fac = factorial(12);
-    fputi(fac, STDOUT);
-    putchar('\n');
+    print_int(fac);
+    print_char('\n');
 }

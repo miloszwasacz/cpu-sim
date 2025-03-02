@@ -1,7 +1,7 @@
 #include<stdlib.h>
 #include "bareio.h"
 
-int fputc(int c, int fd) {
+int fprint_char(int c, int fd) {
     unsigned char buf[1];
     buf[0] = (unsigned char)c;
     if (write(fd, buf, 1) != -1) {
@@ -11,11 +11,11 @@ int fputc(int c, int fd) {
     }
 }
 
-int putchar(int c) {
-    return fputc(c, STDOUT);
+int print_char(int c) {
+    return fprint_char(c, STDOUT);
 }
 
-int fputi(int i, int fd) {
+int fprint_int(int i, int fd) {
     int l = i;
     unsigned int len = i == 0 ? 2 : 1;
     while (l > 0) {
@@ -30,13 +30,13 @@ int fputi(int i, int fd) {
         i /= 10;
     }
 
-    if (fputs(text, fd) == EOF)
+    if (fprint_str(text, fd) == EOF)
         return EOF;
 
     return 1;
 }
 
-int fputix(int i, int fd) {
+int fprint_int_hex(int i, int fd) {
     const unsigned int len = 2 + 8 + 1;
     char *text = malloc(len * sizeof(char));
     text[0] = '0';
@@ -48,13 +48,13 @@ int fputix(int i, int fd) {
         i = i >> 4;
     }
     
-    if (fputs(text, fd) == EOF)
+    if (fprint_str(text, fd) == EOF)
         return EOF;
     
     return 1;
 }
 
-int fputib(int i, int fd) {
+int fprint_int_bin(int i, int fd) {
     const unsigned int len = 2 + 32 + 1;
     char *text = malloc(len * sizeof(char));
     text[0] = '0';
@@ -65,28 +65,28 @@ int fputib(int i, int fd) {
         i = i >> 1;
     }
     
-    if (fputs(text, fd) == EOF)
+    if (fprint_str(text, fd) == EOF)
         return EOF;
     
     return 1;
 }
 
-int fputs(const char *s, int fd) {
+int print_int(int i) {
+    return fprint_int(i, STDOUT);
+}
+
+int fprint_str(const char *s, int fd) {
     for (unsigned int i = 0; s[i] != '\0'; i++) {
-        if (fputc(s[i], fd) == EOF)
+        if (fprint_char(s[i], fd) == EOF)
             return EOF;
     }
+
     return 1;
 }
 
-int puts(const char *s) {
-    if (fputs(s, STDOUT) == EOF)
-        return EOF;
-    
-    if (fputc('\n', STDOUT) == EOF)
+int print(const char *s) {
+    if (fprint_str(s, STDOUT) == EOF)
         return EOF;
     
     return 1;
 }
-
-//#pragma GCC diagnostic pop

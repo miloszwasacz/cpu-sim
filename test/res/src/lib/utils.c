@@ -8,11 +8,11 @@ void swap(int *a, int* b) {
 }
 
 void print_array(int a[], uint n) {
-    fputc('[', STDOUT);
-    fputi(a[0], STDOUT);
+    print_char('[');
+    print_int(a[0]);
     for (uint i = 1; i < n; i++) {
-        fputs(", ", STDOUT);
-        fputi(a[i], STDOUT);
+        print(", ");
+        print_int(a[i]);
     }
-    fputs("]\n", STDOUT);
+    print("]\n");
 }
