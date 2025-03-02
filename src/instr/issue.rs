@@ -26,8 +26,8 @@ impl Branch {
             Branch::Ne => src1.i() != src2.i(),
             Branch::Lt => src1.i() < src2.i(),
             Branch::Ltu => src1.u() < src2.u(),
-            Branch::Ge => src1.i() > src2.i(),
-            Branch::Geu => src1.u() > src2.u(),
+            Branch::Ge => src1.i() >= src2.i(),
+            Branch::Geu => src1.u() >= src2.u(),
         }
     }
 }
