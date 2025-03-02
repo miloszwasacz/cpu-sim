@@ -1,12 +1,11 @@
 pub use self::errno::Errno;
-pub use self::loader::Loader;
 use crate::components::memory::{Address, Memory, MemoryAccess};
 
 use std::fs::File;
 use std::io::{self, ErrorKind, Read, Seek, SeekFrom, Write};
 
 mod errno;
-mod loader;
+pub mod loader;
 
 macro_rules! assert_fd_valid {
     ($fd:expr) => {
@@ -28,7 +27,7 @@ pub struct Os {
 }
 
 impl Os {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             errno_addr: None,
             _end_addr: 0,
@@ -211,11 +210,5 @@ impl Os {
                 },
             )
         })
-    }
-}
-
-impl Default for Os {
-    fn default() -> Self {
-        Self::new()
     }
 }

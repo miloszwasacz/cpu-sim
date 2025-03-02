@@ -49,7 +49,7 @@ pub struct Cpu<'m> {
 
 impl<'m> Cpu<'m> {
     pub fn new(mem_bus: Bus<'m, Memory>) -> Self {
-        let os = Default::default();
+        let os = Os::new();
         let front_end = FrontEnd::new(mem_bus);
         let mut exec_engine = ExecutionEngine::new(front_end.issue_regs());
         let mem_subsystem = MemorySubsystem::new(exec_engine.mem_access_regs(), mem_bus);
@@ -62,6 +62,7 @@ impl<'m> Cpu<'m> {
             exec_engine.mem_access_regs(),
             mem_subsystem.writeback_regs(),
         );
+        let exit = false;
 
         Self {
             os,
@@ -69,7 +70,7 @@ impl<'m> Cpu<'m> {
             exec_engine,
             mem_subsystem,
             hazard_unit,
-            exit: false,
+            exit,
         }
     }
 

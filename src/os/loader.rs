@@ -3,24 +3,30 @@ use crate::components::memory::{Address, Memory};
 
 use elf::endian::LittleEndian;
 use elf::ElfBytes;
-use std::fs;
+use std::error::Error;
 use std::path::Path;
+use std::{fmt, fs, io};
 
 pub struct Loader;
 
 impl Loader {
     const ERRNO_PTR_NAME: &'static str = "_impure_ptr";
     const _END_NAME: &'static str = "_end";
-    
+
     /// Loads the program to memory and initializes the CPU's PC.
-    pub fn load<P: AsRef<Path>>(&self, bin: P, mem: &mut Memory, cpu: &mut Cpu) {
-        let bin = fs::read(bin).expect("file should exist and be readable");
+    pub fn load<P: AsRef<Path>>(
+        &self,
+        bin: P,
+        mem: &mut Memory,
+        cpu: &mut Cpu,
+    ) -> Result<(), LoaderError> {
+        let bin = fs::read(bin)?;
 
         let elf = ElfBytes::<LittleEndian>::minimal_parse(&bin)
-            .expect("binary should be a valid ELF file");
+            .map_err(|err| LoaderError::ParseError("Binary should be a valid ELF file", err))?;
         let segments = elf
             .segments()
-            .expect("program header table should be present");
+            .ok_or(LoaderError::MissingProgramHeaderTable)?;
 
         for segment in segments {
             let offset = segment.p_offset as usize;
@@ -31,22 +37,72 @@ impl Loader {
         }
 
         cpu.set_entrypoint(elf.ehdr.e_entry as Address);
-        cpu.os().set_errno_addr(Self::get_symbol_addr(&elf, Self::ERRNO_PTR_NAME));
-        cpu.os().set__end_addr(Self::get_symbol_addr(&elf, Self::_END_NAME).expect("_end should be present"));
+        cpu.os()
+            .set_errno_addr(Self::get_symbol_addr(&elf, Self::ERRNO_PTR_NAME)?);
+        cpu.os().set__end_addr(
+            Self::get_symbol_addr(&elf, Self::_END_NAME)?.ok_or(LoaderError::Missing_End)?,
+        );
+
+        Ok(())
     }
 
-    fn get_symbol_addr(elf: &ElfBytes<LittleEndian>, symbol_name: &str) -> Option<Address> {
+    fn get_symbol_addr(
+        elf: &ElfBytes<LittleEndian>,
+        symbol_name: &str,
+    ) -> Result<Option<Address>, LoaderError> {
         let (symtab, strtab) = elf
             .symbol_table()
-            .expect("shdrs should parse")
-            .expect(".symtab and .strtab should be present");
-        
-        let sym = symtab.iter().find(|sym| {
-            strtab
-                .get(sym.st_name as usize)
-                .map(|name| name == symbol_name)
-                .unwrap_or(false)
-        })?;
-        Some(sym.st_value as Address)
+            .map_err(|err| LoaderError::ParseError("`shdrs` should parse", err))?
+            .ok_or(LoaderError::MissingSymbolTable)?;
+
+        let sym_addr = symtab
+            .iter()
+            .find(|sym| {
+                strtab
+                    .get(sym.st_name as usize)
+                    .map(|name| name == symbol_name)
+                    .unwrap_or(false)
+            })
+            .map(|sym| sym.st_value as Address);
+
+        Ok(sym_addr)
+    }
+}
+
+#[derive(Debug)]
+pub enum LoaderError {
+    Io(io::Error),
+    ParseError(&'static str, elf::ParseError),
+    MissingProgramHeaderTable,
+    #[allow(non_camel_case_types)]
+    Missing_End,
+    MissingSymbolTable,
+}
+
+impl fmt::Display for LoaderError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LoaderError::Io(err) => write!(f, "IO error: {}", err),
+            LoaderError::ParseError(msg, err) => write!(f, "Parse error: {}: {}", msg, err),
+            LoaderError::MissingProgramHeaderTable => {
+                write!(f, "Parse error: Program header table should be present")
+            }
+            LoaderError::Missing_End => write!(
+                f,
+                "Parse error: `{}` symbol should be present",
+                Loader::_END_NAME
+            ),
+            LoaderError::MissingSymbolTable => {
+                write!(f, "Parse error: .symtab and .strtab should be present")
+            }
+        }
+    }
+}
+
+impl Error for LoaderError {}
+
+impl From<io::Error> for LoaderError {
+    fn from(value: io::Error) -> Self {
+        Self::Io(value)
     }
 }
