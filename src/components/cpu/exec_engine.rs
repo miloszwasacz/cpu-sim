@@ -80,8 +80,9 @@ impl ExecutionEngine {
         &self.mem_access_regs
     }
 
+    // TODO Add docs why it's unsafe
     pub(super) unsafe fn int_reg_file(&mut self) -> &mut ArchRegFile {
-        self.int_reg_file.inner_mut()
+        unsafe { self.int_reg_file.inner_mut() }
     }
 
     pub fn start_cycle(&mut self) {

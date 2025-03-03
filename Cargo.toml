@@ -10,11 +10,11 @@ delegate = "0.13.2"
 [package]
 name = "cpu-sim"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 build = "crates/build/src/main.rs"
 
 [dependencies]
-cpu_sim_derive = { path = "crates/derive" }
+cpu-sim-derive = { path = "crates/derive" }
 const_format = { workspace = true }
 delegate = { workspace = true }
 elf = "0.7.4"

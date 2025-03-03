@@ -37,7 +37,7 @@ version = "0.1.0"
 dependencies = [
  "const_format",
  "convert_case",
- "cpu_sim_derive",
+ "cpu-sim-derive",
  "delegate",
  "elf",
  "itertools",
@@ -54,7 +54,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cpu_sim_derive"
+name = "cpu-sim-derive"
 version = "0.1.0"
 dependencies = [
  "convert_case",

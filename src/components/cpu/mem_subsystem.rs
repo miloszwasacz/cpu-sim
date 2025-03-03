@@ -32,8 +32,9 @@ impl<'m> MemorySubsystem<'m> {
         &self.writeback_regs
     }
 
+    // TODO Add docs why it's unsafe
     pub(super) unsafe fn mem(&mut self) -> RefMut<'_, Memory> {
-        self.mem_bus.inner_mut().borrow_mut()
+        unsafe { self.mem_bus.inner_mut().borrow_mut() }
     }
 
     pub fn start_cycle(&mut self) {
