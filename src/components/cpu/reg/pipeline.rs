@@ -1,8 +1,7 @@
 //! Pipeline regs
 //TODO Better docs
 
-use super::arf::ArchRegName;
-use super::RegData;
+use super::{RegData, RegName};
 use crate::components::cpu::alu::AluControl;
 use crate::components::cpu::circuit::{Circuit, ClockCycle};
 use crate::components::cpu::error::{
@@ -114,9 +113,9 @@ pub struct IssueRegs {
     pub mem_ctrl: MemAccessControl,
     pub wb_ctrl: WritebackControl,
     pub err_ctrl: ErrorControl,
-    pub rs1: ArchRegName,
-    pub rs2: ArchRegName,
-    pub rd: ArchRegName,
+    pub rs1: RegName,
+    pub rs2: RegName,
+    pub rd: RegName,
     pub imm: Immediate,
 }
 
@@ -169,9 +168,9 @@ pub struct ExecuteRegs {
     pub mem_ctrl: MemAccessControl,
     pub wb_ctrl: WritebackControl,
     pub err_ctrl: ErrorControl,
-    pub src1: (ArchRegName, RegData),
-    pub src2: (ArchRegName, RegData),
-    pub write_reg: ArchRegName,
+    pub src1: (RegName, RegData),
+    pub src2: (RegName, RegData),
+    pub write_reg: RegName,
     pub imm: Immediate,
 }
 
@@ -182,7 +181,7 @@ pub struct MemAccessRegs {
     pub err_ctrl: ErrorControl,
     pub alu_out: RegData,
     pub write_data: RegData,
-    pub write_reg: ArchRegName,
+    pub write_reg: RegName,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -191,7 +190,7 @@ pub struct WritebackRegs {
     pub err_ctrl: ErrorControl,
     pub alu_out: RegData,
     pub read_data: RegData,
-    pub write_reg: ArchRegName,
+    pub write_reg: RegName,
 }
 
 //#endregion

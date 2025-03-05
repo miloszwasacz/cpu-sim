@@ -1,5 +1,5 @@
 use crate::components::cpu::alu::AluControl;
-use crate::components::cpu::reg::arf::ArchRegName;
+use crate::components::cpu::reg::RegName;
 use crate::instr::decode::{ITypeFormat, STypeFormat};
 use crate::instr::execute::{AluSrcB, ExecUnit};
 use crate::instr::raw::RawInstr;
@@ -101,9 +101,9 @@ macro_rules! delegate_decode {
 
             delegate::delegate! {
                 to self.0 {
-                    fn rs1(&self) -> ArchRegName;
-                    fn rs2(&self) -> ArchRegName;
-                    fn rd(&self) -> ArchRegName;
+                    fn rs1(&self) -> RegName;
+                    fn rs2(&self) -> RegName;
+                    fn rd(&self) -> RegName;
                     fn imm(&self) -> Immediate;
                 }
             }

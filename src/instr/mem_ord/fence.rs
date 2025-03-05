@@ -1,5 +1,5 @@
 use crate::components::cpu::alu::AluControl;
-use crate::components::cpu::reg::arf::ArchRegName;
+use crate::components::cpu::reg::RegName;
 use crate::instr::decode::ITypeFormat;
 use crate::instr::display::display_width;
 use crate::instr::execute::{AluSrcB, ExecUnit};
@@ -44,13 +44,13 @@ impl Decode for Fence {
             rd.is_zero(),
             "{} should have `rd` set to `{}`",
             Self::DISPLAY_NAME,
-            ArchRegName::ZERO
+            RegName::ZERO
         );
         assert!(
             rs1.is_zero(),
             "{} should have `rs1` set to `{}`",
             Self::DISPLAY_NAME,
-            ArchRegName::ZERO
+            RegName::ZERO
         );
 
         let sw = imm & FLAG_MASK == 0b1;
@@ -136,11 +136,7 @@ impl fmt::Display for Fence {
             _ => {
                 macro_rules! flag {
                     ($value:expr, $flag_name:literal) => {
-                        if $value {
-                            $flag_name
-                        } else {
-                            ""
-                        }
+                        if $value { $flag_name } else { "" }
                     };
                 }
 

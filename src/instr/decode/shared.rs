@@ -1,4 +1,4 @@
-use crate::components::cpu::reg::arf::ArchRegName;
+use crate::components::cpu::reg::RegName;
 use crate::instr::raw::{Bits, RawInstr, RawInstrBits};
 
 pub(crate) const REG_LEN: u64 = 5;
@@ -52,7 +52,7 @@ pub(crate) fn decode_opcode(instr: RawInstr) -> Opcode {
     Opcode(instr.extract_bits::<{ Opcode::LEN }, { Opcode::MSB }>())
 }
 
-pub(crate) fn decode_rd(instr: RawInstr) -> ArchRegName {
+pub(crate) fn decode_rd(instr: RawInstr) -> RegName {
     instr.extract_bits::<RD_LEN, RD_MSB>().into()
 }
 
@@ -60,11 +60,11 @@ pub(crate) fn decode_funct3(instr: RawInstr) -> Funct3 {
     Funct3(instr.extract_bits::<{ Funct3::LEN }, { Funct3::MSB }>())
 }
 
-pub(crate) fn decode_rs1(instr: RawInstr) -> ArchRegName {
+pub(crate) fn decode_rs1(instr: RawInstr) -> RegName {
     instr.extract_bits::<RS1_LEN, RS1_MSB>().into()
 }
 
-pub(crate) fn decode_rs2(instr: RawInstr) -> ArchRegName {
+pub(crate) fn decode_rs2(instr: RawInstr) -> RegName {
     instr.extract_bits::<RS2_LEN, RS2_MSB>().into()
 }
 

@@ -16,17 +16,17 @@ pub fn derive_decode(input: TokenStream) -> TokenStream {
             }
 
             #[inline]
-            fn rs1(&self) -> crate::components::cpu::reg::arf::ArchRegName {
+            fn rs1(&self) -> crate::components::cpu::reg::RegName {
                 #format.rs1()
             }
 
             #[inline]
-            fn rs2(&self) -> crate::components::cpu::reg::arf::ArchRegName {
+            fn rs2(&self) -> crate::components::cpu::reg::RegName {
                 #format.rs2()
             }
 
             #[inline]
-            fn rd(&self) -> crate::components::cpu::reg::arf::ArchRegName {
+            fn rd(&self) -> crate::components::cpu::reg::RegName {
                 #format.rd()
             }
 

@@ -2,7 +2,7 @@ pub use self::encoding::*;
 pub(crate) use self::shared::REG_LEN;
 use super::raw::RawInstr;
 use super::Immediate;
-use crate::components::cpu::reg::arf::ArchRegName;
+use crate::components::cpu::reg::RegName;
 
 mod encoding;
 mod generated;
@@ -13,15 +13,15 @@ pub trait Decode {
     where
         Self: Sized;
 
-    fn rs1(&self) -> ArchRegName {
+    fn rs1(&self) -> RegName {
         Default::default()
     }
 
-    fn rs2(&self) -> ArchRegName {
+    fn rs2(&self) -> RegName {
         Default::default()
     }
 
-    fn rd(&self) -> ArchRegName {
+    fn rd(&self) -> RegName {
         Default::default()
     }
 

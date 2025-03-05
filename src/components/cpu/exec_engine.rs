@@ -3,7 +3,6 @@ use self::alu::Alu;
 use self::branch::BranchUnit;
 use super::circuit::{Circuit, ClockCycle};
 use super::hazard::HazardUnit;
-use super::reg::arf::ArchRegFile;
 use super::reg::pipeline::{
     ErrorControl, ExecuteControl, ExecuteRegs, IssueControl, IssueRegs, Jump, MemAccessRegs,
     PipelineRegs, WritebackControl, WritebackRegs,
@@ -19,7 +18,7 @@ pub mod branch;
 pub struct ExecutionEngine {
     // Issue
     issue_regs: PipelineRegs<IssueRegs>,
-    int_reg_file: Circuit<ArchRegFile>,
+    int_reg_file: Circuit<RegFile>,
     execute_regs: PipelineRegs<ExecuteRegs>,
 
     // Execute
@@ -81,7 +80,7 @@ impl ExecutionEngine {
     }
 
     // TODO Add docs why it's unsafe
-    pub(super) unsafe fn int_reg_file(&mut self) -> &mut ArchRegFile {
+    pub(super) unsafe fn int_reg_file(&mut self) -> &mut RegFile {
         unsafe { self.int_reg_file.inner_mut() }
     }
 
@@ -252,10 +251,6 @@ impl ExecutionEngine {
         alu_out: RegData,
         read_data: RegData,
     ) -> RegData {
-        if mem_to_reg {
-            read_data
-        } else {
-            alu_out
-        }
+        if mem_to_reg { read_data } else { alu_out }
     }
 }

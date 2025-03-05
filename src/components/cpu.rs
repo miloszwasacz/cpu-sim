@@ -4,8 +4,7 @@ pub use self::exec_engine::{agu, alu, branch};
 use self::front_end::FrontEnd;
 use self::hazard::HazardUnit;
 use self::mem_subsystem::MemorySubsystem;
-use self::reg::arf::ArchRegName;
-use self::reg::RegFile;
+use self::reg::RegName;
 use super::memory::{Address, Memory};
 use super::Bus;
 use crate::instr::{EnvTrap, SyscallCode};
@@ -99,7 +98,7 @@ impl<'m> Cpu<'m> {
                 TickResult::Err(err) => return Err(err),
                 TickResult::Halt => {
                     let reg_file = unsafe { self.exec_engine.int_reg_file() };
-                    let exit_code = reg_file.get(ArchRegName::A0).i();
+                    let exit_code = reg_file.get(RegName::A0).i();
                     return Ok(CpuRun::Exit(exit_code));
                 }
             }
@@ -160,46 +159,46 @@ impl<'m> Cpu<'m> {
         let reg_file = unsafe { self.exec_engine.int_reg_file() };
         let mem = unsafe { &mut self.mem_subsystem.mem() };
         // TODO Log unknown syscalls instead of panicking
-        let syscall = SyscallCode::try_from(reg_file.get(ArchRegName::A7)).unwrap();
+        let syscall = SyscallCode::try_from(reg_file.get(RegName::A7)).unwrap();
         match syscall {
             SyscallCode::Exit => self.exit = true,
             SyscallCode::Close => {
-                let fd = reg_file.get(ArchRegName::A0).i();
+                let fd = reg_file.get(RegName::A0).i();
                 let result = os_call!(self.os, mem, |os| os.close(fd));
-                reg_file.set(ArchRegName::A0, result);
+                reg_file.set(RegName::A0, result);
             }
             SyscallCode::Fstat => {
-                let fd = reg_file.get(ArchRegName::A0).i();
-                let statbuf = reg_file.get(ArchRegName::A1).addr();
+                let fd = reg_file.get(RegName::A0).i();
+                let statbuf = reg_file.get(RegName::A1).addr();
                 let result = os_call!(self.os, mem, |os| os.fstat(mem, fd, statbuf));
-                reg_file.set(ArchRegName::A0, result);
+                reg_file.set(RegName::A0, result);
             }
             SyscallCode::Lseek => {
-                let fd = reg_file.get(ArchRegName::A0).i();
-                let offset = reg_file.get(ArchRegName::A1).i();
-                let whence = reg_file.get(ArchRegName::A2).i();
+                let fd = reg_file.get(RegName::A0).i();
+                let offset = reg_file.get(RegName::A1).i();
+                let whence = reg_file.get(RegName::A2).i();
                 let result = os_call!(self.os, mem, |os| os.lseek(fd, offset, whence));
-                reg_file.set(ArchRegName::A0, result);
+                reg_file.set(RegName::A0, result);
             }
             SyscallCode::Read => {
-                let fd = reg_file.get(ArchRegName::A0).i();
-                let buf = reg_file.get(ArchRegName::A1).addr();
-                let count = reg_file.get(ArchRegName::A2).u();
+                let fd = reg_file.get(RegName::A0).i();
+                let buf = reg_file.get(RegName::A1).addr();
+                let count = reg_file.get(RegName::A2).u();
                 let result = os_call!(self.os, mem, |os| os.read(mem, fd, buf, count));
-                reg_file.set(ArchRegName::A0, result);
+                reg_file.set(RegName::A0, result);
             }
             SyscallCode::Sbrk => {
-                let incr = reg_file.get(ArchRegName::A0).i();
-                let sp = reg_file.get(ArchRegName::SP).addr();
+                let incr = reg_file.get(RegName::A0).i();
+                let sp = reg_file.get(RegName::SP).addr();
                 let result = os_call!(self.os, mem, |os| os.sbrk(sp, incr));
-                reg_file.set(ArchRegName::A0, result);
+                reg_file.set(RegName::A0, result);
             }
             SyscallCode::Write => {
-                let fd = reg_file.get(ArchRegName::A0).i();
-                let buf = reg_file.get(ArchRegName::A1).addr();
-                let count = reg_file.get(ArchRegName::A2).u();
+                let fd = reg_file.get(RegName::A0).i();
+                let buf = reg_file.get(RegName::A1).addr();
+                let count = reg_file.get(RegName::A2).u();
                 let result = os_call!(self.os, mem, |os| os.write(mem, fd, buf, count));
-                reg_file.set(ArchRegName::A0, result);
+                reg_file.set(RegName::A0, result);
             }
         }
     }

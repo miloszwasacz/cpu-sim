@@ -1,5 +1,5 @@
 use super::{delegate_decode, EncodingFormat, UTypeFormat};
-use crate::components::cpu::reg::arf::ArchRegName;
+use crate::components::cpu::reg::RegName;
 use crate::instr::raw::RawInstr;
 use crate::instr::{Decode, Immediate, Writeback};
 

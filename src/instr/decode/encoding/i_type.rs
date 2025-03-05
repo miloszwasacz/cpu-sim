@@ -1,5 +1,5 @@
 use super::EncodingFormat;
-use crate::components::cpu::reg::arf::ArchRegName;
+use crate::components::cpu::reg::RegName;
 use crate::instr::decode::shared::{decode_rd, decode_rs1};
 use crate::instr::raw::RawInstr;
 use crate::instr::{Decode, Immediate, Writeback};
@@ -8,8 +8,8 @@ use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ITypeFormat {
-    rd: ArchRegName,
-    rs1: ArchRegName,
+    rd: RegName,
+    rs1: RegName,
     imm: Immediate,
 }
 
@@ -28,11 +28,11 @@ impl Decode for ITypeFormat {
         Self { rd, rs1, imm }
     }
 
-    fn rs1(&self) -> ArchRegName {
+    fn rs1(&self) -> RegName {
         self.rs1
     }
 
-    fn rd(&self) -> ArchRegName {
+    fn rd(&self) -> RegName {
         self.rd
     }
 

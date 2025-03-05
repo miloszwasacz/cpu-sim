@@ -1,11 +1,10 @@
 use super::circuit::ClockCycle;
 use super::exec_engine::ExecutionEngine;
-use super::reg::arf::ArchRegName;
 use super::reg::pipeline::{
     DecodeRegs, ExecuteControl, ExecuteRegs, FetchRegs, IssueControl, IssueRegs, MemAccessRegs,
     PipelineRegs, WritebackControl, WritebackRegs,
 };
-use super::reg::RegData;
+use super::reg::{RegData, RegName};
 use crate::instr::issue::Branch;
 
 pub struct HazardUnit {
@@ -146,8 +145,8 @@ impl HazardUnit {
     //noinspection DuplicatedCode
     pub fn issue_forward_in(
         &self,
-        (rs1, src1): (ArchRegName, RegData),
-        (rs2, src2): (ArchRegName, RegData),
+        (rs1, src1): (RegName, RegData),
+        (rs2, src2): (RegName, RegData),
     ) -> (RegData, RegData) {
         let MemAccessRegs {
             wb_ctrl:
@@ -177,7 +176,7 @@ impl HazardUnit {
             .mem_access_out
             .expect("the Memory Access stage should be performed before the Issue stage");
 
-        let forward_single = |r: ArchRegName, src: RegData| {
+        let forward_single = |r: RegName, src: RegData| {
             if reg_eq_non_zero(r, write_reg_e) && reg_write_e && !mem_to_reg_e {
                 alu_out_e
             } else if reg_eq_non_zero(r, write_reg_m) && reg_write_m {
@@ -195,8 +194,8 @@ impl HazardUnit {
     //noinspection DuplicatedCode
     pub fn execute_forward_in(
         &self,
-        (rs1, src1): (ArchRegName, RegData),
-        (rs2, src2): (ArchRegName, RegData),
+        (rs1, src1): (RegName, RegData),
+        (rs2, src2): (RegName, RegData),
     ) -> (RegData, RegData) {
         let MemAccessRegs {
             wb_ctrl:
@@ -220,7 +219,7 @@ impl HazardUnit {
             ..
         } = self.tick_state.writeback_regs;
 
-        let forward_single = |r: ArchRegName, src: RegData| {
+        let forward_single = |r: RegName, src: RegData| {
             if reg_eq_non_zero(r, write_reg_m) && reg_write_m && !mem_to_reg_m {
                 alu_out_m
             } else if reg_eq_non_zero(r, write_reg_w) && reg_write_w {
@@ -241,7 +240,7 @@ impl HazardUnit {
     }
 }
 
-fn reg_eq_non_zero(r1: ArchRegName, r2: ArchRegName) -> bool {
+fn reg_eq_non_zero(r1: RegName, r2: RegName) -> bool {
     r1 == r2 && !r1.is_zero()
 }
 
