@@ -1,16 +1,10 @@
 use proc_macro2::Span;
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
-use syn::{
-    parse_quote, parse_quote_spanned, Data, DeriveInput, Expr, Field, Ident, Type,
-};
+use syn::{parse_quote, parse_quote_spanned, Data, DeriveInput, Expr, Field, Ident, Type};
 
 pub mod decode;
 pub mod display;
-pub mod instr;
-pub mod issue;
-pub mod mem_access;
-pub mod writeback;
 
 struct InstrDeriveInput {
     name: Ident,

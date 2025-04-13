@@ -1,21 +1,10 @@
-use super::instr::{Format, FormatType, Instr};
+use super::instr_meta::{Format, FormatType, Instr};
+use super::tags::{missing_tag, tag};
 
 use itertools::Itertools;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-
-macro_rules! tag {
-    ($tag:literal) => {
-        const_format::formatcp!("#{}!", $tag)
-    };
-}
-
-macro_rules! missing_tag {
-    ($tag:expr) => {
-        panic!("could not find tag `{}`", $tag)
-    };
-}
 
 const ENCODING_CONST: &str = "ENCODING";
 const TEMPLATE: &str = include_str!("../../res/decode.template.rs");
@@ -40,7 +29,7 @@ pub fn generate_decode(out_dir: &Path, instrs: &[Instr]) {
         .find(TAG_ENCODINGS)
         .unwrap_or_else(|| missing_tag!(TAG_ENCODINGS));
 
-    let start = &TEMPLATE[0..special_tag];
+    let start = &TEMPLATE[..special_tag];
     let middle = &TEMPLATE[special_tag + TAG_SPECIAL.len()..encodings_tag];
     let end = &TEMPLATE[encodings_tag + TAG_ENCODINGS.len()..];
 
@@ -53,7 +42,9 @@ pub fn generate_decode(out_dir: &Path, instrs: &[Instr]) {
 
         impl_file.write_all(b"0b").unwrap();
         impl_file.write_all(encoding.as_bytes()).unwrap();
-        impl_file.write_all(b" => return Ok(Box::new(").unwrap();
+        impl_file.write_all(b" => return Ok(FullInstruction::").unwrap();
+        impl_file.write_all(instr.name.as_bytes()).unwrap();
+        impl_file.write_all(b"(").unwrap();
         impl_file.write_all(instr.name.as_bytes()).unwrap();
         impl_file.write_all(b"::decode(instr))),\n").unwrap();
     }
@@ -82,7 +73,9 @@ pub fn generate_decode(out_dir: &Path, instrs: &[Instr]) {
             impl_file.write_all(b"0b").unwrap();
         }
         impl_file.write_all(funct7.as_bytes()).unwrap();
-        impl_file.write_all(b") => Box::new(").unwrap();
+        impl_file.write_all(b") => FullInstruction::").unwrap();
+        impl_file.write_all(instr.name.as_bytes()).unwrap();
+        impl_file.write_all(b"(").unwrap();
         impl_file.write_all(instr.name.as_bytes()).unwrap();
         impl_file.write_all(b"::decode(instr)),\n").unwrap();
     }

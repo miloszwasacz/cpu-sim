@@ -9,7 +9,7 @@ fn main() -> ExitCode {
 
     let mem = RefCell::new(Memory::new());
     let mut cpu = Cpu::new(&mem);
-    if let Err(err) = Loader.load(FILE, &mut mem.borrow_mut(), &mut cpu) {
+    if let Err(err) = unsafe { Loader.load(FILE, &mut mem.borrow_mut(), &mut cpu) } {
         eprintln!("{}", err);
         return ExitCode::FAILURE;
     }
@@ -24,8 +24,10 @@ fn main() -> ExitCode {
                 eprintln!("process break");
                 continue;
             }
-            Err(err) => {
-                eprintln!("{}", err);
+            Err(errs) => {
+                for err in errs {
+                    eprintln!("{}", err);
+                }
                 return ExitCode::FAILURE;
             }
         }

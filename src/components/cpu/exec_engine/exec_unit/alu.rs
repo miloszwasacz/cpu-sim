@@ -1,15 +1,13 @@
 use crate::components::cpu::reg::RegData;
+use crate::components::memory::Address;
+use crate::instr::Immediate;
 
-pub(super) struct Alu(());
+pub(in crate::components::cpu) struct Alu;
 
 impl Alu {
     const SHIFT_MASK: u32 = 0b11111;
 
-    pub fn new() -> Self {
-        Self(())
-    }
-
-    pub fn process(&self, op: AluControl, src_a: RegData, src_b: RegData) -> RegData {
+    pub fn process(&mut self, op: AluControl, src_a: RegData, src_b: RegData) -> RegData {
         match op {
             AluControl::Add => RegData::signed(src_a.i().wrapping_add(src_b.i())),
             AluControl::Sub => RegData::signed(src_a.i().wrapping_sub(src_b.i())),
@@ -32,11 +30,23 @@ impl Alu {
             AluControl::Sltu => RegData::unsigned(if src_a.u() < src_b.u() { 1 } else { 0 }),
         }
     }
+
+    pub fn jump_target(
+        &mut self,
+        base: RegData,
+        offset: Immediate,
+        apply_mask: bool,
+    ) -> Address {
+        let mut target = base.i().wrapping_add(offset);
+        if apply_mask {
+            target &= !0b1;
+        }
+        target as Address
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AluControl {
-    #[default]
     Add,
     Sub,
     And,

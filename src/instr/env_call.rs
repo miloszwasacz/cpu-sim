@@ -10,16 +10,7 @@ instr_mod!(ebreak);
 
 macro_rules! system_instr {
     ($name:ident, $trap:ident) => {
-        #[derive(
-            Debug,
-            Clone,
-            Copy,
-            PartialEq,
-            Eq,
-            cpu_sim_derive::Issue,
-            cpu_sim_derive::MemoryAccess,
-            cpu_sim_derive::Instr,
-        )]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub struct $name(());
 
         impl crate::instr::decode::Decode for $name {
@@ -29,27 +20,9 @@ macro_rules! system_instr {
             }
         }
 
-        impl crate::instr::Execute for $name {
-            fn exec_unit(&self) -> crate::instr::execute::ExecUnit {
-                crate::instr::execute::ExecUnit::Alu
-            }
-
-            fn alu_src_b(&self) -> crate::instr::execute::AluSrcB {
-                crate::instr::execute::AluSrcB::Reg
-            }
-
-            fn alu_control(&self) -> crate::components::cpu::alu::AluControl {
-                crate::components::cpu::alu::AluControl::Add
-            }
-            
-            fn env_trap(&self) -> Option<crate::instr::EnvTrap> {
-                Some(crate::instr::EnvTrap::$trap)
-            }
-        }
-
-        impl crate::instr::Writeback for $name {
-            fn reg_write(&self) -> bool {
-                false
+        impl From<$name> for crate::instr::Instruction {
+            fn from(_: $name) -> Self {
+                crate::instr::Instruction::EnvTrap(crate::instr::EnvTrap::$trap)
             }
         }
 

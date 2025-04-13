@@ -1,8 +1,9 @@
 use super::EncodingFormat;
 use crate::components::cpu::reg::RegName;
 use crate::instr::decode::shared::decode_rd;
+use crate::instr::decode::Decode;
 use crate::instr::raw::RawInstr;
-use crate::instr::{Decode, Immediate, Writeback};
+use crate::instr::Immediate;
 
 use std::fmt;
 
@@ -22,6 +23,16 @@ impl UTypeFormat {
         Self { rd, imm }
     }
 
+    #[inline(always)]
+    pub fn rd(&self) -> RegName {
+        self.rd
+    }
+
+    #[inline(always)]
+    pub fn imm(&self) -> Immediate {
+        self.imm
+    }
+
     fn decode_imm(instr: RawInstr) -> Immediate {
         let imm_31_12 = instr.extract_bits::<20, 31>().resize::<{ Self::IMM_LEN }>() << 12u32;
         imm_31_12.into()
@@ -31,20 +42,6 @@ impl UTypeFormat {
 impl Decode for UTypeFormat {
     fn decode(raw: RawInstr) -> Self {
         Self::new(raw, Self::decode_imm)
-    }
-
-    fn rd(&self) -> RegName {
-        self.rd
-    }
-
-    fn imm(&self) -> Immediate {
-        self.imm
-    }
-}
-
-impl Writeback for UTypeFormat {
-    fn reg_write(&self) -> bool {
-        true
     }
 }
 

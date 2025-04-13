@@ -1,5 +1,5 @@
+use crate::instr::full::FullInstruction;
 use crate::instr::raw::{RawInstr, RawInstrBits};
-use crate::instr::Instr;
 
 pub struct Decoder(());
 
@@ -8,22 +8,7 @@ impl Decoder {
         Self(())
     }
 
-    pub fn decode(&mut self, instr: RawInstrBits) -> DecodeResult {
-        if instr == 0 {
-            return DecodeResult::NoInstr;
-        }
-
-        match RawInstr::new(instr).decode() {
-            Ok(instr) => DecodeResult::Ok(instr),
-            Err(instr) => DecodeResult::Err(instr),
-        }
+    pub fn decode(&mut self, instr: RawInstrBits) -> Result<FullInstruction, RawInstr> {
+        RawInstr::new(instr).decode()
     }
-}
-
-#[derive(Debug, Default)]
-pub enum DecodeResult {
-    #[default]
-    NoInstr,
-    Ok(Box<dyn Instr>),
-    Err(RawInstr),
 }

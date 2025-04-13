@@ -14,7 +14,17 @@ impl Loader {
     const _END_NAME: &'static str = "_end";
 
     /// Loads the program to memory and initializes the CPU's PC.
-    pub fn load<P: AsRef<Path>>(
+    ///
+    /// # Safety
+    ///
+    /// This method directly sets `cpu`'s Program Counter. Calling this while the `cpu`
+    /// is in the middle of executing a program might lead to undefined behavior[^1].
+    /// After finishing a program, the `cpu` should be [`reset`](Cpu::reset)
+    /// before loading another program.
+    ///
+    /// [^1]: By _undefined behavior_ we mean the simulation might exhibit undefined behavior.
+    ///       This method is still _safe_ in the [Rust sense](https://doc.rust-lang.org/reference/unsafety.html).
+    pub unsafe fn load<P: AsRef<Path>>(
         &self,
         bin: P,
         mem: &mut Memory,
@@ -36,7 +46,7 @@ impl Loader {
             mem[addr..(addr + size as Address)].copy_from_slice(&bin[offset..(offset + size)])
         }
 
-        cpu.set_entrypoint(elf.ehdr.e_entry as Address);
+        unsafe { cpu.set_pc(elf.ehdr.e_entry as Address) };
         cpu.os()
             .set_errno_addr(Self::get_symbol_addr(&elf, Self::ERRNO_PTR_NAME)?);
         cpu.os().set__end_addr(

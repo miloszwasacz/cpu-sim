@@ -1,17 +1,37 @@
+pub use self::data_type::DataType;
+use crate::apply_macro;
 use crate::components::memory::Address;
 
 use std::fmt;
 
-macro_rules! regdata_from_int {
-    ($ty:ident, SignedRegData) => {
+mod data_type;
+
+macro_rules! regdata_from_impls {
+    ($ty:ty, SignedRegData) => {
+        impl From<RegData> for $ty {
+            #[inline(always)]
+            fn from(value: RegData) -> Self {
+                value.i() as $ty
+            }
+        }
+
         impl From<$ty> for RegData {
+            #[inline(always)]
             fn from(value: $ty) -> Self {
                 RegData::signed(value as SignedRegData)
             }
         }
     };
-    ($ty:ident, UnsignedRegData) => {
+    ($ty:ty, UnsignedRegData) => {
+        impl From<RegData> for $ty {
+            #[inline(always)]
+            fn from(value: RegData) -> Self {
+                value.u() as $ty
+            }
+        }
+
         impl From<$ty> for RegData {
+            #[inline(always)]
             fn from(value: $ty) -> Self {
                 RegData::unsigned(value as UnsignedRegData)
             }
@@ -61,17 +81,17 @@ impl fmt::Debug for RegData {
     }
 }
 
+impl PartialEq for RegData {
+    fn eq(&self, other: &Self) -> bool {
+        self.i().eq(&other.i())
+    }
+}
+
 impl Default for RegData {
     fn default() -> Self {
         Self { i: 0 }
     }
 }
 
-regdata_from_int!(u8, UnsignedRegData);
-regdata_from_int!(u16, UnsignedRegData);
-regdata_from_int!(u32, UnsignedRegData);
-regdata_from_int!(u64, UnsignedRegData);
-regdata_from_int!(i8, SignedRegData);
-regdata_from_int!(i16, SignedRegData);
-regdata_from_int!(i32, SignedRegData);
-regdata_from_int!(i64, SignedRegData);
+apply_macro!(i8 i16 i32 i64 => regdata_from_impls!(SignedRegData));
+apply_macro!(u8 u16 u32 u64 => regdata_from_impls!(UnsignedRegData));

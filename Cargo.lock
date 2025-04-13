@@ -3,6 +3,12 @@
 version = 4
 
 [[package]]
+name = "bitflags"
+version = "2.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c8214115b7bf84099f1309324e63141d4c5d7cc26862f97a0a857dbefe165bd"
+
+[[package]]
 name = "const_format"
 version = "0.2.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -35,10 +41,10 @@ dependencies = [
 name = "cpu-sim"
 version = "0.1.0"
 dependencies = [
+ "bitflags",
  "const_format",
  "convert_case",
  "cpu-sim-derive",
- "delegate",
  "elf",
  "itertools",
  "libc",
@@ -58,17 +64,6 @@ name = "cpu-sim-derive"
 version = "0.1.0"
 dependencies = [
  "convert_case",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "delegate"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "297806318ef30ad066b15792a8372858020ae3ca2e414ee6c2133b1eb9e9e945"
-dependencies = [
  "proc-macro2",
  "quote",
  "syn",

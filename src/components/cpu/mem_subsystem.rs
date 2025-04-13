@@ -1,85 +1,85 @@
-use super::circuit::{Circuit, ClockCycle};
-use super::hazard::HazardUnit;
-use super::reg::pipeline::{MemAccessControl, MemAccessRegs, PipelineRegs, WritebackRegs};
+pub(super) use self::entry::LoadQueueEntry;
+use super::exec_engine::exec_unit::ExecResult;
+use super::exec_engine::ReorderBuffer;
+use super::flip_flop::{Clearable, Sequential};
 use crate::components::memory::Memory;
-use crate::components::Bus;
 
-use std::cell::RefMut;
+use itertools::Itertools;
+use std::collections::VecDeque;
+use std::mem;
+use std::num::NonZeroUsize;
 
-pub struct MemorySubsystem<'m> {
-    mem_access_regs: PipelineRegs<MemAccessRegs>,
-    mem_bus: Circuit<Bus<'m, Memory>>,
-    writeback_regs: PipelineRegs<WritebackRegs>,
+mod entry;
+
+pub struct LoadQueue {
+    queue: VecDeque<LoadQueueEntry>,
+    scheduled: Vec<LoadQueueEntry>,
+    dequeued: bool,
+    cleared: bool,
 }
 
-impl<'m> MemorySubsystem<'m> {
-    pub(super) fn new(
-        mem_access_regs: &PipelineRegs<MemAccessRegs>,
-        mem_bus: Bus<'m, Memory>,
-    ) -> MemorySubsystem<'m> {
-        let mem_access_regs = mem_access_regs.clone();
-        let mem_bus = mem_bus.into();
-        let writeback_regs = Default::default();
-
-        Self {
-            mem_access_regs,
-            mem_bus,
-            writeback_regs,
+impl LoadQueue {
+    pub fn with_capacity(capacity: NonZeroUsize) -> Self {
+        LoadQueue {
+            queue: VecDeque::with_capacity(capacity.get()),
+            scheduled: Vec::new(),
+            dequeued: false,
+            cleared: false,
         }
     }
 
-    pub fn writeback_regs(&self) -> &PipelineRegs<WritebackRegs> {
-        &self.writeback_regs
+    pub fn free_spaces(&self) -> usize {
+        debug_assert!(!self.cleared);
+        self.queue.capacity() - self.queue.len()
     }
 
-    // TODO Add docs why it's unsafe
-    pub(super) unsafe fn mem(&mut self) -> RefMut<'_, Memory> {
-        unsafe { self.mem_bus.inner_mut().borrow_mut() }
+    pub fn execute(&mut self, rob: &ReorderBuffer, mem: &Memory) -> Option<ExecResult> {
+        debug_assert!(!self.cleared);
+        self.queue
+            .iter()
+            .find(|load| {
+                // There can be no RAW hazards caused by preceding stores or traps
+                !rob.preceding_stores(load.tag())
+                    .map_ok(|store| load.has_hazard(store))
+                    .any(|hazard| hazard.unwrap_or(true))
+            })
+            .map(|instr| {
+                self.dequeued = true;
+                instr.execute(mem)
+            })
     }
 
-    pub fn start_cycle(&mut self) {
-        self.mem_bus.reset();
-        self.writeback_regs.reset();
+    pub fn write(&mut self, results: Vec<LoadQueueEntry>) {
+        debug_assert!(self.scheduled.is_empty() && !self.cleared);
+        self.scheduled = results;
     }
+}
 
-    pub fn memory_access(&mut self, hazard_unit: &mut HazardUnit) {
-        let MemAccessRegs {
-            mem_ctrl,
-            wb_ctrl,
-            err_ctrl,
-            alu_out,
-            write_data,
-            write_reg,
-        } = self.mem_access_regs.read(ClockCycle::FirstHalf);
-        let MemAccessControl {
-            mem_write,
-            mem_read,
-        } = mem_ctrl;
-
-        {
-            let mut mem = self.mem_bus.write(ClockCycle::FirstHalf).borrow_mut();
-            if let Some(mem_write) = mem_write {
-                mem_write(&mut mem, alu_out.addr(), write_data)
-            }
+impl Sequential for LoadQueue {
+    fn finish_cycle(&mut self) {
+        if self.cleared {
+            self.queue.clear();
+            self.scheduled = Vec::new();
+            self.dequeued = false;
+            self.cleared = false;
+            return;
         }
-        let read_data = {
-            let mem = self.mem_bus.read(ClockCycle::SecondHalf).borrow();
-            match mem_read {
-                Some(mem_read) => mem_read(&mem, alu_out.addr()),
-                None => Default::default(),
-            }
-        };
+        debug_assert!(
+            self.queue.len() + self.scheduled.len() <= self.queue.capacity(),
+            "load queue overflow"
+        );
 
-        let writeback_regs = WritebackRegs {
-            wb_ctrl,
-            err_ctrl,
-            alu_out,
-            read_data,
-            write_reg,
-        };
+        if self.dequeued {
+            self.queue.pop_front();
+            self.dequeued = false;
+        }
+        self.queue.extend(mem::take(&mut self.scheduled));
+    }
+}
 
-        hazard_unit.mem_access_forward_out(writeback_regs);
-        self.writeback_regs
-            .write(ClockCycle::SecondHalf, writeback_regs);
+impl Clearable for LoadQueue {
+    fn clear(&mut self) {
+        debug_assert!(!self.cleared);
+        self.cleared = true;
     }
 }

@@ -1,4 +1,4 @@
-pub fn decode(instr: RawInstr) -> Result<Box<dyn Instr>, RawInstr> {
+pub fn decode(instr: RawInstr) -> Result<FullInstruction, RawInstr> {
     match instr.encoding() {
         #SPECIAL!
         _ => {}

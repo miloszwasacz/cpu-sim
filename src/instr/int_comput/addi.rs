@@ -1,26 +1,22 @@
-use crate::components::cpu::alu::AluControl;
-use crate::instr::decode::ITypeFormat;
+use crate::components::cpu::AluControl;
+use crate::instr::decode::encoding::ITypeFormat;
 use crate::instr::display::display_width;
-use crate::instr::execute::{AluSrcB, ExecUnit};
-use crate::instr::{Decode, Execute};
+use crate::instr::{AluSrcA, AluSrcB, Instruction};
 
-use cpu_sim_derive::{Decode, Instr, Issue, MemoryAccess, Writeback};
+use cpu_sim_derive::Decode;
 use std::fmt;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Decode, Issue, MemoryAccess, Writeback, Instr)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Decode)]
 pub struct Addi(ITypeFormat);
 
-impl Execute for Addi {
-    fn exec_unit(&self) -> ExecUnit {
-        ExecUnit::Alu
-    }
-
-    fn alu_src_b(&self) -> AluSrcB {
-        AluSrcB::Imm
-    }
-
-    fn alu_control(&self) -> AluControl {
-        AluControl::Add
+impl From<Addi> for Instruction {
+    fn from(value: Addi) -> Self {
+        Instruction::Alu {
+            ctrl: AluControl::Add,
+            src1: AluSrcA::Reg(value.0.rs1()),
+            src2: AluSrcB::Imm(value.0.imm()),
+            dest: value.0.rd(),
+        }
     }
 }
 
@@ -36,10 +32,10 @@ impl fmt::Display for Addi {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let width = display_width!(f);
 
-        let is_li = self.rs1().is_zero();
-        let is_mv = self.imm() == 0;
+        let is_li = self.0.rs1().is_zero();
+        let is_mv = self.0.imm() == 0;
 
-        if self.rd().is_zero() && is_li && is_mv {
+        if self.0.rd().is_zero() && is_li && is_mv {
             return write!(f, "{:<width$}", Self::NOP_DISPLAY_NAME);
         }
 
@@ -51,16 +47,16 @@ impl fmt::Display for Addi {
             Self::DISPLAY_NAME
         };
         write!(f, "{:<width$} ", name)?;
-        self.rd().fmt(f)?;
+        self.0.rd().fmt(f)?;
         if !is_li {
             write!(f, ", ")?;
-            self.rs1().fmt(f)?;
+            self.0.rs1().fmt(f)?;
             if is_mv {
                 return Ok(());
             }
         }
         write!(f, ", ")?;
-        self.imm().fmt(f)
+        self.0.imm().fmt(f)
     }
 }
 

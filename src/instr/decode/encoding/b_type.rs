@@ -1,7 +1,8 @@
-use super::{delegate_decode, EncodingFormat, STypeFormat};
+use super::{EncodingFormat, STypeFormat};
 use crate::components::cpu::reg::RegName;
+use crate::instr::decode::Decode;
 use crate::instr::raw::RawInstr;
-use crate::instr::{Decode, Immediate, Writeback};
+use crate::instr::Immediate;
 
 use std::fmt;
 
@@ -10,6 +11,21 @@ pub struct BTypeFormat(STypeFormat);
 
 impl BTypeFormat {
     const IMM_LEN: u64 = STypeFormat::IMM_LEN;
+
+    #[inline(always)]
+    pub fn rs1(&self) -> RegName {
+        self.0.rs1()
+    }
+
+    #[inline(always)]
+    pub fn rs2(&self) -> RegName {
+        self.0.rs2()
+    }
+
+    #[inline(always)]
+    pub fn imm(&self) -> Immediate {
+        self.0.imm()
+    }
 
     fn decode_imm(instr: RawInstr) -> Immediate {
         let imm_12 = instr.extract_bits::<1, 31>().resize::<{ Self::IMM_LEN }>() << 12u32;
@@ -23,14 +39,6 @@ impl BTypeFormat {
 impl Decode for BTypeFormat {
     fn decode(raw: RawInstr) -> Self {
         Self(STypeFormat::new(raw, Self::decode_imm))
-    }
-
-    delegate_decode!();
-}
-
-impl Writeback for BTypeFormat {
-    fn reg_write(&self) -> bool {
-        self.0.reg_write()
     }
 }
 

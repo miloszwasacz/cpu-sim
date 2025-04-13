@@ -1,7 +1,8 @@
-use super::{delegate_decode, EncodingFormat, UTypeFormat};
+use super::{EncodingFormat, UTypeFormat};
 use crate::components::cpu::reg::RegName;
+use crate::instr::decode::Decode;
 use crate::instr::raw::RawInstr;
-use crate::instr::{Decode, Immediate, Writeback};
+use crate::instr::Immediate;
 
 use std::fmt;
 
@@ -10,6 +11,16 @@ pub struct JTypeFormat(UTypeFormat);
 
 impl JTypeFormat {
     const IMM_LEN: u64 = 21;
+
+    #[inline(always)]
+    pub fn rd(&self) -> RegName {
+        self.0.rd()
+    }
+
+    #[inline(always)]
+    pub fn imm(&self) -> Immediate {
+        self.0.imm()
+    }
 
     fn decode_imm(instr: RawInstr) -> Immediate {
         let imm_20 = instr.extract_bits::<1, 31>().resize::<{ Self::IMM_LEN }>() << 20u32;
@@ -23,14 +34,6 @@ impl JTypeFormat {
 impl Decode for JTypeFormat {
     fn decode(raw: RawInstr) -> Self {
         Self(UTypeFormat::new(raw, Self::decode_imm))
-    }
-
-    delegate_decode!();
-}
-
-impl Writeback for JTypeFormat {
-    fn reg_write(&self) -> bool {
-        self.0.reg_write()
     }
 }
 

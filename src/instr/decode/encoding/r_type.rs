@@ -1,8 +1,8 @@
 use super::EncodingFormat;
 use crate::components::cpu::reg::RegName;
 use crate::instr::decode::shared::{decode_rd, decode_rs1, decode_rs2};
+use crate::instr::decode::Decode;
 use crate::instr::raw::RawInstr;
-use crate::instr::{Decode, Writeback};
 
 use std::fmt;
 
@@ -13,6 +13,23 @@ pub struct RTypeFormat {
     rs2: RegName,
 }
 
+impl RTypeFormat {
+    #[inline(always)]
+    pub fn rd(&self) -> RegName {
+        self.rd
+    }
+
+    #[inline(always)]
+    pub fn rs1(&self) -> RegName {
+        self.rs1
+    }
+
+    #[inline(always)]
+    pub fn rs2(&self) -> RegName {
+        self.rs2
+    }
+}
+
 impl Decode for RTypeFormat {
     fn decode(raw: RawInstr) -> Self {
         let rd = decode_rd(raw);
@@ -20,24 +37,6 @@ impl Decode for RTypeFormat {
         let rs2 = decode_rs2(raw);
 
         Self { rd, rs1, rs2 }
-    }
-
-    fn rs1(&self) -> RegName {
-        self.rs1
-    }
-
-    fn rs2(&self) -> RegName {
-        self.rs2
-    }
-
-    fn rd(&self) -> RegName {
-        self.rd
-    }
-}
-
-impl Writeback for RTypeFormat {
-    fn reg_write(&self) -> bool {
-        true
     }
 }
 

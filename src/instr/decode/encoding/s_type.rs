@@ -1,8 +1,9 @@
 use super::EncodingFormat;
 use crate::components::cpu::reg::RegName;
 use crate::instr::decode::shared::{decode_rs1, decode_rs2};
+use crate::instr::decode::Decode;
 use crate::instr::raw::RawInstr;
-use crate::instr::{Decode, Immediate, Writeback};
+use crate::instr::Immediate;
 
 use std::fmt;
 
@@ -24,6 +25,21 @@ impl STypeFormat {
         Self { rs1, rs2, imm }
     }
 
+    #[inline(always)]
+    pub fn rs1(&self) -> RegName {
+        self.rs1
+    }
+
+    #[inline(always)]
+    pub fn rs2(&self) -> RegName {
+        self.rs2
+    }
+
+    #[inline(always)]
+    pub fn imm(&self) -> Immediate {
+        self.imm
+    }
+
     fn decode_imm(instr: RawInstr) -> Immediate {
         let imm_11_5 = instr.extract_bits::<7, 31>().resize::<{ Self::IMM_LEN }>() << 5u32;
         let imm_4_0 = instr.extract_bits::<5, 11>().resize::<{ Self::IMM_LEN }>();
@@ -34,24 +50,6 @@ impl STypeFormat {
 impl Decode for STypeFormat {
     fn decode(raw: RawInstr) -> Self {
         Self::new(raw, Self::decode_imm)
-    }
-
-    fn rs1(&self) -> RegName {
-        self.rs1
-    }
-
-    fn rs2(&self) -> RegName {
-        self.rs2
-    }
-
-    fn imm(&self) -> Immediate {
-        self.imm
-    }
-}
-
-impl Writeback for STypeFormat {
-    fn reg_write(&self) -> bool {
-        false
     }
 }
 

@@ -1,9 +1,9 @@
-use crate::components::cpu::alu::AluControl;
-use crate::components::cpu::reg::RegName;
-use crate::instr::decode::{ITypeFormat, STypeFormat};
-use crate::instr::execute::{AluSrcB, ExecUnit};
+use crate::components::cpu::reg::{DataType, RegData};
+use crate::components::memory::{Address, Memory, MemoryAccess};
+use crate::instr::decode::encoding::{ITypeFormat, STypeFormat};
+use crate::instr::decode::Decode;
 use crate::instr::raw::RawInstr;
-use crate::instr::{Decode, Execute, Immediate, Issue, Writeback};
+use crate::instr::Instruction;
 
 use std::fmt;
 use std::marker::PhantomData;
@@ -17,145 +17,55 @@ instr_mod!(sb);
 instr_mod!(sh);
 instr_mod!(sw);
 
-//#region Macros
-
 macro_rules! load_store_instr {
-    ($name:ident, Load<$size:ty>) => {
-        load_store_instr!($name, Load, $size);
-
-        impl crate::instr::MemoryAccess for $name {
-            fn mem_read(&self) -> Option<crate::instr::mem_access::MemRead> {
-                fn read(
-                    mem: &crate::components::memory::Memory,
-                    addr: crate::components::memory::Address,
-                ) -> crate::components::cpu::reg::RegData {
-                    let data: $size = crate::components::memory::MemoryAccess::get(mem, addr);
-                    data.into()
-                }
-                Some(read)
-            }
-
-            fn mem_write(&self) -> Option<crate::instr::mem_access::MemWrite> {
-                None
-            }
-        }
-    };
-    ($name:ident, Store<$size:ty>) => {
-        load_store_instr!($name, Store, $size);
-
-        impl crate::instr::MemoryAccess for $name {
-            fn mem_read(&self) -> Option<crate::instr::mem_access::MemRead> {
-                None
-            }
-
-            fn mem_write(&self) -> Option<crate::instr::mem_access::MemWrite> {
-                fn write(
-                    mem: &mut crate::components::memory::Memory,
-                    addr: crate::components::memory::Address,
-                    data: crate::components::cpu::reg::RegData,
-                ) {
-                    let data = data.i() as $size;
-                    crate::components::memory::MemoryAccess::set(mem, addr, data);
-                }
-
-                Some(write)
-            }
-        }
-    };
-    ($name:ident, $instr:ident, $size:ty) => {
+    ($name:ident, $parent:ty) => {
         #[derive(
-            Debug,
-            cpu_sim_derive::Display,
-            Clone,
-            Copy,
-            PartialEq,
-            Eq,
-            cpu_sim_derive::Decode,
-            cpu_sim_derive::Issue,
-            cpu_sim_derive::Writeback,
-            cpu_sim_derive::Instr,
+            Debug, cpu_sim_derive::Display, Clone, Copy, PartialEq, Eq, cpu_sim_derive::Decode,
         )]
-        pub struct $name(crate::instr::ld_str::$instr::<$size>);
+        pub struct $name($parent);
 
-        impl crate::instr::Execute for $name {
-            delegate::delegate! {
-                to self.0 {
-                    fn exec_unit(&self) -> crate::instr::execute::ExecUnit;
-                    fn alu_src_a(&self) -> crate::instr::execute::AluSrcA;
-                    fn alu_src_b(&self) -> crate::instr::execute::AluSrcB;
-                    fn alu_control(&self) -> crate::components::cpu::alu::AluControl;
-                    fn mask_jump_target(&self) -> bool;
-                }
+        impl From<$name> for crate::instr::Instruction {
+            #[inline(always)]
+            fn from(value: $name) -> Self {
+                value.0.into()
             }
         }
     };
 }
 use load_store_instr;
 
-macro_rules! delegate_decode {
-    ($instr:ident, $format:ident) => {
-        impl<T> Decode for $instr<T> {
-            fn decode(raw: RawInstr) -> Self {
-                Self($format::decode(raw), PhantomData)
-            }
-
-            delegate::delegate! {
-                to self.0 {
-                    fn rs1(&self) -> RegName;
-                    fn rs2(&self) -> RegName;
-                    fn rd(&self) -> RegName;
-                    fn imm(&self) -> Immediate;
-                }
-            }
-        }
-    };
-}
-
-macro_rules! impl_issue {
-    ($instr:ident) => {
-        impl<T> Issue for $instr<T> {
-            fn branch(&self) -> crate::instr::issue::Branch {
-                crate::instr::issue::Branch::None
-            }
-        }
-    };
-}
-
-//#endregion
-
 //#region Load
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Load<T>(ITypeFormat, PhantomData<T>);
 
-delegate_decode!(Load, ITypeFormat);
-
-impl_issue!(Load);
-
-impl<T> Execute for Load<T> {
-    fn exec_unit(&self) -> ExecUnit {
-        ExecUnit::LoadAgu
-    }
-
-    fn alu_src_b(&self) -> AluSrcB {
-        AluSrcB::Imm
-    }
-
-    fn alu_control(&self) -> AluControl {
-        AluControl::Add
+impl<T> Decode for Load<T> {
+    fn decode(raw: RawInstr) -> Self {
+        Self(ITypeFormat::decode(raw), PhantomData)
     }
 }
 
-impl<T> Writeback for Load<T> {
-    fn reg_write(&self) -> bool {
-        true
+impl<T: DataType> From<Load<T>> for Instruction {
+    fn from(value: Load<T>) -> Self {
+        let load = |mem: &Memory, addr: Address| {
+            let data: T = MemoryAccess::get(mem, addr);
+            data.into()
+        };
+
+        Instruction::Load {
+            load,
+            byte_count: size_of::<T>(),
+            base: value.0.rs1(),
+            offset: value.0.imm(),
+            dest: value.0.rd(),
+        }
     }
 }
 
 impl<T> fmt::Display for Load<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.rd().fmt(f)?;
-        write!(f, ", {}({})", self.imm(), self.rs1())
+        self.0.rd().fmt(f)?;
+        write!(f, ", {}({})", self.0.imm(), self.0.rs1())
     }
 }
 
@@ -166,34 +76,33 @@ impl<T> fmt::Display for Load<T> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Store<T>(STypeFormat, PhantomData<T>);
 
-delegate_decode!(Store, STypeFormat);
-
-impl_issue!(Store);
-
-impl<T> Execute for Store<T> {
-    fn exec_unit(&self) -> ExecUnit {
-        ExecUnit::StoreAgu
-    }
-
-    fn alu_src_b(&self) -> AluSrcB {
-        AluSrcB::Imm
-    }
-
-    fn alu_control(&self) -> AluControl {
-        AluControl::Add
+impl<T> Decode for Store<T> {
+    fn decode(raw: RawInstr) -> Self {
+        Self(STypeFormat::decode(raw), PhantomData)
     }
 }
 
-impl<T> Writeback for Store<T> {
-    fn reg_write(&self) -> bool {
-        false
+impl<T: DataType> From<Store<T>> for Instruction {
+    fn from(value: Store<T>) -> Self {
+        let store = |mem: &mut Memory, addr: Address, data: RegData| {
+            let data: T = data.into();
+            MemoryAccess::set(mem, addr, data);
+        };
+
+        Instruction::Store {
+            store,
+            byte_count: size_of::<T>(),
+            src: value.0.rs2(),
+            base: value.0.rs1(),
+            offset: value.0.imm(),
+        }
     }
 }
 
 impl<T> fmt::Display for Store<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.rs2().fmt(f)?;
-        write!(f, ", {}({})", self.imm(), self.rs1())
+        self.0.rs2().fmt(f)?;
+        write!(f, ", {}({})", self.0.imm(), self.0.rs1())
     }
 }
 

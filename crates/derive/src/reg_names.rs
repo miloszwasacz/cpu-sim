@@ -1,5 +1,5 @@
-use super::*;
 use self::data::RegisterNamesInput;
+use super::*;
 
 mod data {
     use convert_case::{Case, Casing};
@@ -57,7 +57,6 @@ mod data {
     }
 }
 
-
 pub fn register_names(input: TokenStream) -> TokenStream {
     let RegisterNamesInput { ty, regs } = parse_macro_input!(input as RegisterNamesInput);
     let defs = regs
@@ -73,15 +72,15 @@ pub fn register_names(input: TokenStream) -> TokenStream {
 
         impl std::fmt::Display for #ty {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                let width = if f.alternate() { 4 } else { 0 };
-                write!(
-                    f,
-                    "{:>width$}",
-                    match self.0 {
-                        #( #displays, )*
-                        _ => unreachable!(),
-                    }
-                )
+                let name = match self.0 {
+                    #( #displays, )*
+                    _ => unreachable!(),
+                };
+                if f.alternate() {
+                    write!(f, "{:>4}", name)
+                } else {
+                    std::fmt::Display::fmt(name, f)
+                }
             }
         }
     })

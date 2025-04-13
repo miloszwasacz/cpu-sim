@@ -1,18 +1,13 @@
-use crate::components::cpu::alu::AluControl;
 use crate::components::cpu::reg::RegName;
-use crate::instr::decode::ITypeFormat;
+use crate::instr::decode::encoding::ITypeFormat;
+use crate::instr::decode::Decode;
 use crate::instr::display::display_width;
-use crate::instr::execute::{AluSrcB, ExecUnit};
-use crate::instr::issue::Branch;
-use crate::instr::mem_access::{MemRead, MemWrite};
 use crate::instr::raw::RawInstr;
-use crate::instr::{Decode, Execute, Immediate, Issue, MemoryAccess, Writeback};
+use crate::instr::{Immediate, Instruction};
 
-use cpu_sim_derive::Instr;
 use std::fmt;
 
-// TODO Properly implement `Issue`, `Execute`, `MemoryAccess` and `Writeback` for `Fence`
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Instr)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Fence {
     fm: u32,
     pi: bool,
@@ -85,39 +80,9 @@ impl Decode for Fence {
     }
 }
 
-impl Issue for Fence {
-    fn branch(&self) -> Branch {
-        todo!()
-    }
-}
-
-impl Execute for Fence {
-    fn exec_unit(&self) -> ExecUnit {
-        todo!()
-    }
-
-    fn alu_src_b(&self) -> AluSrcB {
-        todo!()
-    }
-
-    fn alu_control(&self) -> AluControl {
-        todo!()
-    }
-}
-
-impl MemoryAccess for Fence {
-    fn mem_read(&self) -> Option<MemRead> {
-        todo!()
-    }
-
-    fn mem_write(&self) -> Option<MemWrite> {
-        todo!()
-    }
-}
-
-impl Writeback for Fence {
-    fn reg_write(&self) -> bool {
-        todo!()
+impl From<Fence> for Instruction {
+    fn from(_value: Fence) -> Self {
+        todo!("Properly implement the FENCE instruction")
     }
 }
 

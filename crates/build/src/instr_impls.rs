@@ -1,22 +1,27 @@
 use self::decode::generate_decode;
 use self::display::generate_display_names;
-use self::instr::Instr;
+use self::instr::{generate_enum, generate_instr};
+use self::instr_meta::Instr;
 
 use std::path::Path;
 
 mod decode;
 mod display;
+mod instr;
+mod tags;
 
 const SPEC: &str = include_str!("../res/decode.spec");
 
 pub fn code_gen(out_dir: &Path) {
     let instrs = SPEC.lines().map(Instr::from_spec_line).collect::<Vec<_>>();
 
+    generate_enum(out_dir, &instrs);
     generate_decode(out_dir, &instrs);
+    generate_instr(out_dir, &instrs);
     generate_display_names(out_dir, &instrs);
 }
 
-mod instr {
+mod instr_meta {
     use convert_case::{Boundary, Case, Casing};
 
     pub struct Instr<'a> {

@@ -1,29 +1,19 @@
-use crate::components::cpu::alu::AluControl;
-use crate::instr::decode::UTypeFormat;
-use crate::instr::execute::{AluSrcA, AluSrcB, ExecUnit};
-use crate::instr::Execute;
+use crate::components::cpu::AluControl;
+use crate::instr::decode::encoding::UTypeFormat;
+use crate::instr::{AluSrcA, AluSrcB, Instruction};
 
-use cpu_sim_derive::{Decode, Display, Instr, Issue, MemoryAccess, Writeback};
+use cpu_sim_derive::{Decode, Display};
 
-#[derive(
-    Debug, Display, Clone, Copy, PartialEq, Eq, Decode, Issue, MemoryAccess, Writeback, Instr,
-)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Decode)]
 pub struct Auipc(UTypeFormat);
 
-impl Execute for Auipc {
-    fn exec_unit(&self) -> ExecUnit {
-        ExecUnit::Alu
-    }
-
-    fn alu_src_a(&self) -> AluSrcA {
-        AluSrcA::Pc
-    }
-
-    fn alu_src_b(&self) -> AluSrcB {
-        AluSrcB::Imm
-    }
-
-    fn alu_control(&self) -> AluControl {
-        AluControl::Add
+impl From<Auipc> for Instruction {
+    fn from(value: Auipc) -> Self {
+        Instruction::Alu {
+            ctrl: AluControl::Add,
+            src1: AluSrcA::Pc,
+            src2: AluSrcB::Imm(value.0.imm()),
+            dest: value.0.rd(),
+        }
     }
 }

@@ -1,256 +1,293 @@
-use self::agu::Agu;
-use self::alu::Alu;
-use self::branch::BranchUnit;
-use super::circuit::{Circuit, ClockCycle};
-use super::hazard::HazardUnit;
-use super::reg::pipeline::{
-    ErrorControl, ExecuteControl, ExecuteRegs, IssueControl, IssueRegs, Jump, MemAccessRegs,
-    PipelineRegs, WritebackControl, WritebackRegs,
-};
-use super::reg::{RegData, RegFile};
-use crate::instr::execute::{AluSrcA, AluSrcB, ExecUnit};
-use crate::instr::EnvTrap;
+pub use self::cdb::CommonDataBus;
+pub use self::exec_unit::ExecUnit;
+pub use self::rob::{ReorderBuffer, RobIndex, StoreMeta};
+pub use self::scheduler::{Scheduler, Schedulers};
 
-pub mod agu;
-pub mod alu;
-pub mod branch;
+use self::exec_unit::ExecResultData;
+use self::rob::{ReadyRobEntry, RobEntry};
+use self::scheduler::{self as rs, RsEntry};
+use super::mem_subsystem::LoadQueueEntry;
+use super::reg::pipeline::IdIsRegs;
+use super::reg::RegData;
+use super::{Cpu, Stall};
+use crate::components::memory::Address;
+use crate::instr::{AluSrcA, Instruction};
 
-pub struct ExecutionEngine {
-    // Issue
-    issue_regs: PipelineRegs<IssueRegs>,
-    int_reg_file: Circuit<RegFile>,
-    execute_regs: PipelineRegs<ExecuteRegs>,
+use bitflags::bitflags;
+use itertools::{Either, Itertools};
 
-    // Execute
-    alu: Circuit<Alu>,
-    load_agu: Circuit<Agu>,
-    store_agu: Circuit<Agu>,
-    branch_unit: Circuit<BranchUnit>,
-    mem_access_regs: PipelineRegs<MemAccessRegs>,
+mod cdb;
+pub mod exec_unit;
+mod rob;
+mod scheduler;
 
-    // Writeback
-    writeback_regs: Option<PipelineRegs<WritebackRegs>>,
+//#region OperationType
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub(super) struct OperationType: u8 {
+        const ALU = 1;
+        const BRANCH = 1 << 1;
+        const STORE = 1 << 2;
+        const LOAD = 1 << 3;
+    }
 }
 
-impl ExecutionEngine {
-    const WB_INIT_ERR: &'static str = "`writeback` should be initialized";
-
-    // TODO mention connecting `writeback_regs` in the docs
-    pub(super) fn new(issue_regs: &PipelineRegs<IssueRegs>) -> Self {
-        // Issue
-        let issue_regs = issue_regs.clone();
-        let int_reg_file = Default::default();
-        let execute_regs = Default::default();
-
-        // Execute
-        let alu = Circuit::new(Alu::new());
-        let load_agu = Circuit::new(Agu::new());
-        let store_agu = Circuit::new(Agu::new());
-        let branch_unit = Circuit::new(BranchUnit::new());
-        let mem_access_regs = Default::default();
-
-        Self {
-            // Issue
-            issue_regs,
-            int_reg_file,
-            execute_regs,
-
-            // Execute
-            alu,
-            load_agu,
-            store_agu,
-            branch_unit,
-            mem_access_regs,
-
-            // Writeback
-            writeback_regs: None,
+impl Instruction {
+    const fn ty(&self) -> OperationType {
+        match self {
+            Instruction::Alu { .. } | Instruction::Jump { .. } | Instruction::EnvTrap(_) => {
+                OperationType::ALU
+            }
+            Instruction::Branch { .. } => OperationType::BRANCH,
+            Instruction::Load { .. } => OperationType::LOAD,
+            Instruction::Store { .. } => OperationType::STORE,
         }
     }
+}
 
-    pub(super) fn connect_writeback_regs(&mut self, writeback_regs: &PipelineRegs<WritebackRegs>) {
-        self.writeback_regs = Some(writeback_regs.clone());
-    }
+//#endregion
 
-    pub fn execute_regs(&self) -> &PipelineRegs<ExecuteRegs> {
-        &self.execute_regs
-    }
+impl Cpu<'_> {
+    #[must_use]
+    pub(super) fn issue(&mut self) -> Stall {
+        let IdIsRegs {
+            instr,
+            pc,
+            pc_plus_4,
+            predicted,
+            target,
+        } = match self.id_is_regs.read() {
+            Some(regs) => *regs,
+            None => return false,
+        };
+        let pc_plus_4 = RegData::address(pc_plus_4);
 
-    pub fn mem_access_regs(&self) -> &PipelineRegs<MemAccessRegs> {
-        &self.mem_access_regs
-    }
-
-    // TODO Add docs why it's unsafe
-    pub(super) unsafe fn int_reg_file(&mut self) -> &mut RegFile {
-        unsafe { self.int_reg_file.inner_mut() }
-    }
-
-    pub fn start_cycle(&mut self) {
-        self.int_reg_file.reset();
-        self.execute_regs.reset();
-        self.alu.reset();
-        self.load_agu.reset();
-        self.store_agu.reset();
-        self.branch_unit.reset();
-        self.mem_access_regs.reset();
-    }
-
-    pub fn issue(&mut self, hazard_unit: &mut HazardUnit) {
-        let IssueRegs {
-            pc_ctrl,
-            is_ctrl,
-            mut ex_ctrl,
-            mem_ctrl,
-            wb_ctrl,
-            err_ctrl,
-            rs1,
-            rs2,
-            rd,
-            imm,
-        } = self.issue_regs.read(ClockCycle::FirstHalf);
-        let IssueControl { branch } = is_ctrl;
-        let int_reg_file = self.int_reg_file.read(ClockCycle::SecondHalf);
-
-        let src1 = (rs1, int_reg_file.get(rs1));
-        let src2 = (rs2, int_reg_file.get(rs2));
-        let (br_src1, br_src2) = hazard_unit.issue_forward_in(src1, src2);
-        ex_ctrl.jump = branch.jumps(br_src1, br_src2);
-        let write_reg = rd;
-
-        let execute_regs = ExecuteRegs {
-            pc_ctrl,
-            ex_ctrl,
-            mem_ctrl,
-            wb_ctrl,
-            err_ctrl,
-            src1,
-            src2,
-            write_reg,
-            imm,
+        let rob_lock = match self.rob.reserve() {
+            Some(lock) => lock,
+            None => return true,
+        };
+        let instr = match instr {
+            Ok(instr) => instr,
+            Err(ex) => {
+                let rob_entry = RobEntry::<rob::Ready>::env_trap(pc, ex.into());
+                rob_lock.issue_ready(rob_entry);
+                return false;
+            }
+        };
+        let rs_lock = match self.schedulers.reserve(instr.ty()) {
+            Some(rs_lock) => rs_lock,
+            _ => return true,
         };
 
-        self.execute_regs
-            .write(ClockCycle::SecondHalf, execute_regs);
+        let rob_index = rob_lock.index();
+        let (rob_entry, rs_entry_data, dest) = match instr {
+            Instruction::Alu {
+                ctrl,
+                src1,
+                src2,
+                dest,
+            } => {
+                let src1 = match src1 {
+                    AluSrcA::Reg(src1) => Ok(src1),
+                    AluSrcA::Pc => Err(pc),
+                };
 
-        if ex_ctrl.jump {
-            hazard_unit.issue_jump();
+                let rob_entry = RobEntry::alu(pc, dest);
+                let rs_entry_data = rs::NotReady::alu(ctrl, src1, src2, &self.regs);
+                (rob_entry, rs_entry_data, Some(dest))
+            }
+            Instruction::Jump {
+                base: AluSrcA::Reg(base),
+                offset,
+                apply_mask,
+                link_reg,
+            } => {
+                let predicted = predicted.expect("non-pc-based jumps should be predicted");
+                let rob_entry = RobEntry::<rob::NotReady>::jump(pc, predicted, link_reg, pc_plus_4);
+                let rs_entry_data = rs::NotReady::jump(base, offset, apply_mask, &self.regs);
+                (rob_entry, rs_entry_data, Some(link_reg))
+            }
+            Instruction::Jump { link_reg, .. } => {
+                // PC-based jumps require no execution, and therefore no reservation stations
+                #[allow(clippy::drop_non_drop)]
+                drop(rs_lock);
+
+                let target = predicted.expect("pc-based jumps should have pre-computed target");
+                let rob_entry = RobEntry::<rob::Ready>::jump(pc, link_reg, pc_plus_4, target);
+
+                rob_lock.issue_ready(rob_entry);
+                self.regs.stat_mut()[link_reg].issue_new(rob_index);
+
+                return false;
+            }
+            Instruction::EnvTrap(trap) => {
+                // Trap instructions require no execution, and therefore no reservation stations
+                #[allow(clippy::drop_non_drop)]
+                drop(rs_lock);
+
+                let rob_entry = RobEntry::<rob::Ready>::env_trap(pc, trap);
+                rob_lock.issue_ready(rob_entry);
+                return false;
+            }
+            Instruction::Branch {
+                ctrl,
+                src1,
+                src2,
+                offset: _,
+            } => {
+                let predicted = predicted.expect("branches should be predicted");
+                let target = target.expect("branches should have pre-computed target");
+                let rob_entry = RobEntry::branch(pc, predicted == target, target);
+                let rs_entry_data = rs::NotReady::branch(ctrl, src1, src2, &self.regs);
+                (rob_entry, rs_entry_data, None)
+            }
+            Instruction::Load {
+                load,
+                byte_count,
+                base,
+                offset,
+                dest,
+            } => {
+                let rob_entry = RobEntry::load(pc, dest);
+                let rs_entry_data = rs::NotReady::load(load, byte_count, base, offset, &self.regs);
+                (rob_entry, rs_entry_data, Some(dest))
+            }
+            Instruction::Store {
+                store,
+                byte_count,
+                src,
+                base,
+                offset,
+            } => {
+                let rob_entry = RobEntry::store(pc, store, byte_count, src);
+                let rs_entry_data = rs::NotReady::store(base, offset, &self.regs);
+                (rob_entry, rs_entry_data, None)
+            }
+        };
+        let rs_entry = RsEntry {
+            dest: rob_index,
+            data: rs_entry_data,
+            op_type: instr.ty(),
+        };
+
+        rob_lock.issue_not_ready(rob_entry);
+        match rs_entry.bypass(&self.rob, &self.cdb) {
+            Ok(ready) => rs_lock.issue_ready(ready),
+            Err(not_ready) => rs_lock.issue_not_ready(not_ready),
         }
+        if let Some(dest) = dest {
+            self.regs.stat_mut()[dest].issue_new(rob_index);
+        }
+
+        false
     }
 
-    pub fn execute(&mut self, hazard_unit: &mut HazardUnit) -> (Jump, Option<EnvTrap>) {
-        let ExecuteRegs {
-            pc_ctrl,
-            ex_ctrl,
-            mem_ctrl,
-            wb_ctrl,
-            mut err_ctrl,
-            src1,
-            src2,
-            write_reg,
-            imm,
-        } = self.execute_regs.read(ClockCycle::FirstHalf);
-        let ExecuteControl {
-            exec_unit,
-            alu_src_a,
-            alu_src_b,
-            alu_control,
-            jump,
-            mask_jump_target,
-            env_trap,
-        } = ex_ctrl;
-        let (src1, src2) = hazard_unit.execute_forward_in(src1, src2);
+    pub(super) fn execute(&mut self) {
+        let rob = &self.rob;
+        let schedulers = self.schedulers.iter_mut();
+        let exec_units = self.exec_units.iter_mut();
+        let load_queue = &mut self.load_queue;
+        let mem = &self.data_mem.borrow();
 
-        let mut jump_target = None;
-        let alu_out = match exec_unit {
-            ExecUnit::Alu => {
-                let src_a = match alu_src_a {
-                    AluSrcA::Reg => src1,
-                    AluSrcA::Pc => RegData::address(pc_ctrl.pc),
-                };
-                let src_b = match alu_src_b {
-                    AluSrcB::Reg => src2,
-                    AluSrcB::Imm => RegData::signed(imm),
-                };
-                let alu = self.alu.write(ClockCycle::FirstHalf);
+        let mut available_loads = load_queue.free_spaces();
+        let (results, load1_results) = schedulers
+            .zip(exec_units)
+            .filter_map(|(scheduler, exec_unit)| {
+                scheduler
+                    .take_first_ready(rob)
+                    .filter(|entry| {
+                        // Loads are restricted by the number of available spaces in the Load Queue
+                        !entry.op_type.contains(OperationType::LOAD)
+                            || available_loads
+                                .checked_sub(1)
+                                .inspect(|new| available_loads = *new)
+                                .is_some()
+                    })
+                    .map(|instr| exec_unit.process(instr))
+            })
+            .chain(load_queue.execute(rob, mem))
+            .partition_map(|result| match result.result {
+                Ok(ExecResultData::Load1 {
+                    load,
+                    byte_count,
+                    addr,
+                }) => Either::Right(LoadQueueEntry::new(result.tag, load, byte_count, addr)),
+                _ => Either::Left(result),
+            });
 
-                alu.process(alu_control, src_a, src_b)
+        self.cdb.write(results);
+        load_queue.write(load1_results);
+    }
+
+    pub fn write_result(&mut self) {
+        self.rob.update_from_cdb(self.cdb.read());
+        self.schedulers.update_from_cdb(self.cdb.read());
+    }
+
+    /// Returns then new PC if there was a branch misprediction.
+    #[must_use]
+    pub fn commit(&mut self) -> Option<Address> {
+        let mem = &mut self.data_mem.borrow_mut();
+        let mut result = Default::default();
+
+        // Commit
+        let (index, entry) = match self.rob.pop_if_ready() {
+            Some(entry) => entry,
+            None => return result,
+        };
+        let data = match *entry.data() {
+            Ok(data) => data,
+            Err(trap) => {
+                self.cycle_result.traps.push(trap);
+                return None;
             }
-            ExecUnit::LoadAgu => {
-                let base = src1;
-                let offset = imm;
-                let agu = self.load_agu.write(ClockCycle::FirstHalf);
+        };
 
-                agu.addr(base, offset)
+        match data {
+            ReadyRobEntry::Alu { dest, value } | ReadyRobEntry::Load { dest, value } => {
+                self.regs.set(dest, value);
+                self.regs.stat_mut()[dest].commit(index);
             }
-            ExecUnit::StoreAgu => {
-                let base = src1;
-                let offset = imm;
-                let agu = self.store_agu.write(ClockCycle::FirstHalf);
-
-                agu.addr(base, offset)
-            }
-            ExecUnit::Branch => {
-                let base = match alu_src_a {
-                    AluSrcA::Reg => src1,
-                    AluSrcA::Pc => RegData::address(pc_ctrl.pc),
-                };
-                let offset = imm;
-                let branch_unit = self.branch_unit.write(ClockCycle::FirstHalf);
-
-                if jump {
-                    let target = branch_unit.target(base, offset, mask_jump_target);
-                    if target == pc_ctrl.pc {
-                        err_ctrl.jump_to_self = true;
-                    }
-                    jump_target = Some(target);
+            ReadyRobEntry::Jump {
+                predicted,
+                link_reg,
+                link_data,
+                target,
+            } => {
+                self.regs.set(link_reg, link_data);
+                self.regs.stat_mut()[link_reg].commit(index);
+                if predicted != target {
+                    result = Some(target);
                 }
-                RegData::address(pc_ctrl.pc_plus4)
+                self.cycle_result.jump_to_self = entry.addr() == target;
             }
-        };
-        let write_data = src2;
-        let mem_access_regs = MemAccessRegs {
-            mem_ctrl,
-            wb_ctrl,
-            err_ctrl,
-            alu_out,
-            write_data,
-            write_reg,
-        };
+            ReadyRobEntry::Branch {
+                predicted,
+                target,
+                taken,
+            } => {
+                if predicted != taken {
+                    result = Some(target);
+                }
+            }
+            ReadyRobEntry::Store {
+                store,
+                byte_count: _,
+                src,
+                addr,
+            } => {
+                // We don't have to model store latency since the result can
+                // be bypassed to any outstanding loads with no delay
 
-        hazard_unit.execute_forward_out(mem_access_regs);
-        self.mem_access_regs
-            .write(ClockCycle::SecondHalf, mem_access_regs);
+                //TODO Technically, that is not true since loaded and stored data
+                //     might have different addresses but still overlap
 
-        (jump_target, env_trap)
-    }
-
-    pub fn writeback(&mut self) -> ErrorControl {
-        let writeback_regs = self.writeback_regs.as_ref().expect(Self::WB_INIT_ERR);
-        let WritebackRegs {
-            wb_ctrl,
-            err_ctrl,
-            alu_out,
-            read_data,
-            write_reg,
-        } = writeback_regs.read(ClockCycle::FirstHalf);
-        let WritebackControl {
-            mem_to_reg,
-            reg_write,
-        } = wb_ctrl;
-        let int_reg_file = self.int_reg_file.write(ClockCycle::FirstHalf);
-
-        let data = Self::writeback_mutex(mem_to_reg, alu_out, read_data);
-        if reg_write {
-            int_reg_file.set(write_reg, data);
+                let value = self.regs.get(src);
+                store(mem, addr, value);
+            }
         }
 
-        err_ctrl
-    }
-
-    pub(super) fn writeback_mutex(
-        mem_to_reg: bool,
-        alu_out: RegData,
-        read_data: RegData,
-    ) -> RegData {
-        if mem_to_reg { read_data } else { alu_out }
+        result
     }
 }

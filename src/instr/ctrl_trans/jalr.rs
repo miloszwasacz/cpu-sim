@@ -1,41 +1,21 @@
-use crate::components::cpu::alu::AluControl;
-use crate::instr::decode::ITypeFormat;
+use crate::instr::decode::encoding::ITypeFormat;
 use crate::instr::display::display_width;
-use crate::instr::execute::{AluSrcA, AluSrcB, ExecUnit};
-use crate::instr::issue::Branch;
-use crate::instr::{Decode, Execute, Issue};
+use crate::instr::{AluSrcA, Instruction};
 
-use cpu_sim_derive::{Decode, Instr, MemoryAccess, Writeback};
+use cpu_sim_derive::Decode;
 use std::fmt;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Decode, MemoryAccess, Writeback, Instr)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Decode)]
 pub struct Jalr(ITypeFormat);
 
-impl Issue for Jalr {
-    fn branch(&self) -> Branch {
-        Branch::Jump
-    }
-}
-
-impl Execute for Jalr {
-    fn exec_unit(&self) -> ExecUnit {
-        ExecUnit::Branch
-    }
-
-    fn alu_src_a(&self) -> AluSrcA {
-        AluSrcA::Reg
-    }
-
-    fn alu_src_b(&self) -> AluSrcB {
-        AluSrcB::Imm
-    }
-
-    fn alu_control(&self) -> AluControl {
-        AluControl::Add
-    }
-
-    fn mask_jump_target(&self) -> bool {
-        true
+impl From<Jalr> for Instruction {
+    fn from(value: Jalr) -> Self {
+        Instruction::Jump {
+            base: AluSrcA::Reg(value.0.rs1()),
+            offset: value.0.imm(),
+            apply_mask: true,
+            link_reg: value.0.rd(),
+        }
     }
 }
 
@@ -48,7 +28,7 @@ impl Jalr {
 impl fmt::Display for Jalr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let width = display_width!(f);
-        let is_jr = self.rd().is_zero() && self.imm() == 0;
+        let is_jr = self.0.rd().is_zero() && self.0.imm() == 0;
 
         let name = if is_jr {
             Self::JR_DISPLAY_NAME
@@ -57,15 +37,15 @@ impl fmt::Display for Jalr {
         };
         write!(f, "{:<width$} ", name)?;
         if !is_jr {
-            self.rd().fmt(f)?;
+            self.0.rd().fmt(f)?;
             write!(f, ", ")?;
         }
 
-        self.rs1().fmt(f)?;
+        self.0.rs1().fmt(f)?;
 
         if !is_jr {
             write!(f, ", ")?;
-            self.imm().fmt(f)?;
+            self.0.imm().fmt(f)?;
         }
 
         Ok(())
