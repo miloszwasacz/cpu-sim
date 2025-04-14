@@ -7,6 +7,7 @@ use crate::components::cpu::flip_flop::{Clearable, FlipFlop, Sequential};
 use std::num::NonZeroUsize;
 use std::slice::{Iter, IterMut};
 
+pub mod diagnostics;
 mod entry;
 mod lock;
 

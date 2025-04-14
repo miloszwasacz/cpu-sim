@@ -10,6 +10,7 @@ pub type Ready = Result<ReadyRobEntry, EnvTrap>;
 
 //#region RobEntry
 
+#[allow(private_bounds)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RobEntry<D: RobEntryData>(D, Address);
 
@@ -153,13 +154,22 @@ impl RobEntry<Ready> {
     }
 }
 
+impl<D: RobEntryData> From<RobEntry<D>> for super::diagnostics::RobEntry<D> {
+    fn from(value: RobEntry<D>) -> Self {
+        Self {
+            addr: value.1.into(),
+            data: value.0,
+        }
+    }
+}
+
 //#endregion
 
 //#region NotReady
 
 //TODO Improve docs
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(in crate::components::cpu::exec_engine) enum NotReadyRobEntry {
+pub enum NotReadyRobEntry {
     Alu {
         /// The register where the result will be put.
         dest: RegName,
@@ -255,6 +265,6 @@ pub enum ReadyRobEntry {
 
 //#endregion
 
-pub trait RobEntryData {}
+pub(super) trait RobEntryData {}
 impl RobEntryData for NotReady {}
 impl RobEntryData for Ready {}

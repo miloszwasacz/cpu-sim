@@ -39,8 +39,8 @@ macro_rules! regdata_from_impls {
     };
 }
 
-type SignedRegData = i32;
-type UnsignedRegData = u32;
+pub(super) type SignedRegData = i32;
+pub(super) type UnsignedRegData = u32;
 
 #[derive(Clone, Copy)]
 pub union RegData {

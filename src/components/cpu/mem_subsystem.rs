@@ -9,6 +9,7 @@ use std::collections::VecDeque;
 use std::mem;
 use std::num::NonZeroUsize;
 
+pub mod diagnostics;
 mod entry;
 
 pub struct LoadQueue {

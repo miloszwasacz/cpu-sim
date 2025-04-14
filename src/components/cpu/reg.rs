@@ -5,6 +5,7 @@ use super::flip_flop::{FlipFlop, Sequential};
 use crate::instr::raw::REG_LEN;
 
 mod data;
+pub mod diagnostics;
 mod name;
 pub(super) mod pipeline;
 mod reg_file;

@@ -16,6 +16,7 @@ use std::error::Error;
 use std::mem;
 use std::num::NonZeroUsize;
 
+pub(super) mod diagnostics;
 pub mod error;
 mod exec_engine;
 mod flip_flop;
@@ -142,13 +143,38 @@ impl<'m> Cpu<'m> {
             return if !errors.is_empty() {
                 Err(errors)
             } else if jump_to_self && self.exit {
-                let exit_code = self.regs.get(RegName::A0).i();
-                Ok(CpuRun::Exit(exit_code))
+                Ok(CpuRun::Exit(self.get_exit_code()))
             } else if brk {
                 Ok(CpuRun::Break)
             } else {
                 continue;
             };
+        }
+    }
+
+    pub fn step(&mut self) -> Result<CpuRun, Vec<Box<dyn Error>>> {
+        let CycleResult {
+            traps,
+            mut errors,
+            jump_to_self,
+        } = self.clock_cycle();
+        for trap in traps {
+            match trap {
+                EnvTrap::Syscall => self.handle_syscall(),
+                EnvTrap::Break => {}
+                EnvTrap::Exception(ex) => {
+                    //TODO Exception handling
+                    errors.push(ex.into())
+                }
+            }
+        }
+
+        if !errors.is_empty() {
+            Err(errors)
+        } else if jump_to_self && self.exit {
+            Ok(CpuRun::Exit(self.get_exit_code()))
+        } else {
+            Ok(CpuRun::Break)
         }
     }
 
@@ -255,6 +281,10 @@ impl<'m> Cpu<'m> {
                 reg_file.set(RegName::A0, result);
             }
         }
+    }
+
+    fn get_exit_code(&self) -> ExitCode {
+        self.regs.get(RegName::A0).i()
     }
 }
 

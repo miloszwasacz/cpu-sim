@@ -66,6 +66,16 @@ impl fmt::Display for RegFile {
     }
 }
 
+impl From<&RegFile> for super::diagnostics::RegFileSnapshot {
+    fn from(value: &RegFile) -> Self {
+        Self(std::array::from_fn(|i| {
+            let name = i.try_into().unwrap();
+            let data = value.0[i].get().i();
+            (name, data)
+        }))
+    }
+}
+
 //#endregion
 
 //#region RegStat
@@ -124,6 +134,16 @@ impl fmt::Display for RegStat {
             }
         }
         Ok(())
+    }
+}
+
+impl From<&RegStat> for super::diagnostics::RegStatSnapshot {
+    fn from(value: &RegStat) -> Self {
+        Self(std::array::from_fn(|i| {
+            let name = i.try_into().unwrap();
+            let stat = super::diagnostics::RegisterStatus(value.0[i].read());
+            (name, stat)
+        }))
     }
 }
 

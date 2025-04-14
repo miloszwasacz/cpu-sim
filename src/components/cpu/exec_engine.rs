@@ -17,6 +17,7 @@ use bitflags::bitflags;
 use itertools::{Either, Itertools};
 
 mod cdb;
+pub mod diagnostics;
 pub mod exec_unit;
 mod rob;
 mod scheduler;

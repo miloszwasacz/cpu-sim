@@ -50,7 +50,7 @@ impl RsEntry<NotReady> {
             }
             _ => None,
         });
-        //TODO If entry A is waiting for result B, but result B produces an exception, 
+        //TODO If entry A is waiting for result B, but result B produces an exception,
         //     entry A will never be free
 
         for (tag, value) in results {
@@ -117,6 +117,15 @@ impl TryFrom<RsEntry<NotReady>> for RsEntry<Ready> {
             data: ready,
             op_type: value.op_type,
         })
+    }
+}
+
+impl<D: RsData> From<RsEntry<D>> for super::diagnostics::SchedulerEntry<D> {
+    fn from(value: RsEntry<D>) -> Self {
+        Self {
+            dest: value.dest,
+            data: value.data,
+        }
     }
 }
 
@@ -261,7 +270,7 @@ impl RegValue {
 
 //#endregion
 
-trait RsData {}
+pub(super) trait RsData {}
 impl RsData for NotReady {}
 impl RsData for Ready {}
 

@@ -11,6 +11,7 @@ use crate::instr::EnvTrap;
 use std::fmt;
 use std::num::NonZeroUsize;
 
+pub mod diagnostics;
 mod entry;
 mod flip_flop;
 mod index;

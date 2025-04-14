@@ -48,3 +48,13 @@ impl LoadQueueEntry {
         ExecResult::load2(self.tag, Ok(data))
     }
 }
+
+impl From<LoadQueueEntry> for super::diagnostics::LoadQueueEntry {
+    fn from(value: LoadQueueEntry) -> Self {
+        Self {
+            addr: value.addr,
+            byte_count: value.byte_count,
+            dest: value.tag,
+        }
+    }
+}
