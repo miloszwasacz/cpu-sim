@@ -19,6 +19,7 @@ itertools = { workspace = true }
 bitflags = "2.9.0"
 elf = "0.7.4"
 libc = "0.2.169"
+ratatui = "0.29.0"
 
 [build-dependencies]
 const_format = { workspace = true }
