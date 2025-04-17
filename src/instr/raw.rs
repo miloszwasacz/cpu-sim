@@ -34,7 +34,7 @@ impl RawInstr {
 
 impl fmt::Display for RawInstr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:032b}", self.bits)
+        f.pad(&format!("{:032b}", self.bits))
     }
 }
 

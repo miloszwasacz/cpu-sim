@@ -1,5 +1,5 @@
 use crate::instr::full::FullInstruction;
-use crate::instr::raw::{RawInstr, RawInstrBits};
+use crate::instr::raw::RawInstr;
 
 pub struct Decoder(());
 
@@ -8,7 +8,7 @@ impl Decoder {
         Self(())
     }
 
-    pub fn decode(&mut self, instr: RawInstrBits) -> Result<FullInstruction, RawInstr> {
-        RawInstr::new(instr).decode()
+    pub fn decode(&mut self, instr: RawInstr) -> Result<FullInstruction, RawInstr> {
+        instr.decode()
     }
 }

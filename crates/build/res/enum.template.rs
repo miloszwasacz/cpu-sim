@@ -2,8 +2,8 @@
 /// 
 /// It should only be used for diagnositcs -- for a type that is used 
 /// for execution, see [`crate::instr::Instruction`].
-#[derive(Debug)]
-pub(crate) enum FullInstruction {
+#[derive(Debug, Clone, Copy)]
+pub enum FullInstruction {
     #INSTRS!
 }
 

@@ -157,7 +157,7 @@ impl RobEntry<Ready> {
 impl<D: RobEntryData> From<RobEntry<D>> for super::diagnostics::RobEntry<D> {
     fn from(value: RobEntry<D>) -> Self {
         Self {
-            addr: value.1.into(),
+            addr: value.1,
             data: value.0,
         }
     }

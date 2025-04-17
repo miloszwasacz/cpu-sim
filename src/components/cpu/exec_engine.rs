@@ -69,7 +69,7 @@ impl Cpu<'_> {
             None => return true,
         };
         let instr = match instr {
-            Ok(instr) => instr,
+            Ok((instr, _)) => instr,
             Err(ex) => {
                 let rob_entry = RobEntry::<rob::Ready>::env_trap(pc, ex.into());
                 rob_lock.issue_ready(rob_entry);

@@ -6,6 +6,7 @@ use super::{Cpu, Pc};
 use crate::components::memory::{Address, MemoryAccess};
 use crate::instr::{AluSrcA, Instruction};
 use crate::{BITS_IN_BYTE, IALIGN};
+use crate::instr::raw::RawInstr;
 
 mod adder;
 mod decoder;
@@ -19,7 +20,7 @@ impl Cpu<'_> {
         let pc_plus_4 = self.pc_adder.add(pc);
 
         let instr = if pc % ALIGN == 0 {
-            Ok(self.instr_mem.borrow().get(pc))
+            Ok(RawInstr::new(self.instr_mem.borrow().get(pc)))
         } else {
             Err(FetchError::MisalignedInstr(pc).into())
         };
@@ -55,8 +56,8 @@ impl Cpu<'_> {
         };
 
         let (regs, jump) = match self.decoder.decode(instr) {
-            Ok(instr) => {
-                let instr = instr.into();
+            Ok(full_instr) => {
+                let instr = full_instr.into();
                 let (predicted, target) = match instr {
                     Instruction::Jump {
                         base,
@@ -85,7 +86,7 @@ impl Cpu<'_> {
                 };
 
                 let regs = IdIsRegs {
-                    instr: Ok(instr),
+                    instr: Ok((instr, full_instr)),
                     pc,
                     pc_plus_4,
                     predicted,

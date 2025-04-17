@@ -1,5 +1,5 @@
-pub use self::data::{RegData, DataType};
-pub use self::name::{error, RegName};
+pub use self::data::{DataType, RegData};
+pub use self::name::RegName;
 pub use self::reg_file::RegFile;
 use super::flip_flop::{FlipFlop, Sequential};
 use crate::instr::raw::REG_LEN;

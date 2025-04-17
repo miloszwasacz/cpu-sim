@@ -15,7 +15,7 @@ mod entry;
 pub struct LoadQueue {
     queue: VecDeque<LoadQueueEntry>,
     scheduled: Vec<LoadQueueEntry>,
-    dequeued: bool,
+    dequeued: Option<usize>,
     cleared: bool,
 }
 
@@ -24,7 +24,7 @@ impl LoadQueue {
         LoadQueue {
             queue: VecDeque::with_capacity(capacity.get()),
             scheduled: Vec::new(),
-            dequeued: false,
+            dequeued: None,
             cleared: false,
         }
     }
@@ -38,14 +38,15 @@ impl LoadQueue {
         debug_assert!(!self.cleared);
         self.queue
             .iter()
-            .find(|load| {
+            .enumerate()
+            .find(|(_, load)| {
                 // There can be no RAW hazards caused by preceding stores or traps
                 !rob.preceding_stores(load.tag())
                     .map_ok(|store| load.has_hazard(store))
                     .any(|hazard| hazard.unwrap_or(true))
             })
-            .map(|instr| {
-                self.dequeued = true;
+            .map(|(i, instr)| {
+                self.dequeued = Some(i);
                 instr.execute(mem)
             })
     }
@@ -61,7 +62,7 @@ impl Sequential for LoadQueue {
         if self.cleared {
             self.queue.clear();
             self.scheduled = Vec::new();
-            self.dequeued = false;
+            self.dequeued = None;
             self.cleared = false;
             return;
         }
@@ -70,9 +71,9 @@ impl Sequential for LoadQueue {
             "load queue overflow"
         );
 
-        if self.dequeued {
-            self.queue.pop_front();
-            self.dequeued = false;
+        if let Some(i) = self.dequeued {
+            self.queue.remove(i);
+            self.dequeued = None;
         }
         self.queue.extend(mem::take(&mut self.scheduled));
     }
