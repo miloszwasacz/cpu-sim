@@ -1,6 +1,7 @@
 use super::entry::RobEntryData;
-pub use super::entry::{NotReady, Ready};
-use super::{ReorderBuffer, RobEntryHolder, RobIndex};
+pub use super::entry::{NotReady, ReadyRobEntry as Ready};
+pub use super::RobIndex;
+use super::{ReorderBuffer, RobEntryHolder};
 use crate::components::diagnostics::Diagnostics;
 use crate::components::memory::Address;
 
@@ -17,7 +18,7 @@ pub struct RobEntry<D: RobEntryData> {
 pub enum RobEntrySnapshot {
     Empty,
     NotReady(RobEntry<NotReady>),
-    Ready(RobEntry<Ready>),
+    Ready(RobEntry<super::entry::Ready>),
 }
 
 impl From<RobEntryHolder> for RobEntrySnapshot {

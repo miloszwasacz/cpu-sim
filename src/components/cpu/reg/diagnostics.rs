@@ -1,18 +1,21 @@
 use super::data::SignedRegData;
 use super::reg_file::{RegFile, RegStat};
-use super::{RegName, ARCH_REG_COUNT};
+pub use super::RegName;
+use super::ARCH_REG_COUNT;
 use crate::components::cpu::exec_engine::RobIndex;
 use crate::components::diagnostics::Diagnostics;
 
 use std::fmt;
 
+pub type RegData = SignedRegData;
+
 pub struct RegFileSnapshot(pub [(RegName, SignedRegData); ARCH_REG_COUNT]);
 
-pub struct RegStatSnapshot(pub [(RegName, RegisterStatus); ARCH_REG_COUNT]);
+pub struct RegStatSnapshot(pub [(RegName, RegStatus); ARCH_REG_COUNT]);
 
-pub struct RegisterStatus(pub(super) Option<RobIndex>);
+pub struct RegStatus(pub(super) Option<RobIndex>);
 
-impl fmt::Display for RegisterStatus {
+impl fmt::Display for RegStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
             Some(r) => {

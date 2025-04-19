@@ -22,7 +22,7 @@ mod exec_engine;
 mod flip_flop;
 mod front_end;
 mod mem_subsystem;
-pub mod reg;
+pub(crate) mod reg;
 
 //TODO Make configurable
 const ROB_CAPACITY: NonZeroUsize = NonZeroUsize::new(96).unwrap();
@@ -106,6 +106,10 @@ impl<'m> Cpu<'m> {
             os: Os::new(),
             exit: false,
         }
+    }
+
+    pub fn scheduler_count(&self) -> usize {
+        self.schedulers.count()
     }
 
     pub(crate) fn os(&mut self) -> &mut Os {

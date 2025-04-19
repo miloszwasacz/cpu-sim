@@ -1,4 +1,4 @@
-use crate::components::memory::Address;
+pub use crate::components::memory::Address;
 
 pub mod cpu;
 

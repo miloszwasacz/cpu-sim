@@ -141,7 +141,7 @@ impl From<&RegStat> for super::diagnostics::RegStatSnapshot {
     fn from(value: &RegStat) -> Self {
         Self(std::array::from_fn(|i| {
             let name = i.try_into().unwrap();
-            let stat = super::diagnostics::RegisterStatus(value.0[i].read());
+            let stat = super::diagnostics::RegStatus(value.0[i].read());
             (name, stat)
         }))
     }

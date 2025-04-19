@@ -49,9 +49,10 @@ impl LoadQueueEntry {
     }
 }
 
-impl From<LoadQueueEntry> for super::diagnostics::LoadQueueEntry {
-    fn from(value: LoadQueueEntry) -> Self {
+impl From<(LoadQueueEntry, bool)> for super::diagnostics::LoadQueueEntry {
+    fn from((value, ready): (LoadQueueEntry, bool)) -> Self {
         Self {
+            ready,
             addr: value.addr,
             byte_count: value.byte_count,
             dest: value.tag,

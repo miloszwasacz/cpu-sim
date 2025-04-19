@@ -39,12 +39,7 @@ impl LoadQueue {
         self.queue
             .iter()
             .enumerate()
-            .find(|(_, load)| {
-                // There can be no RAW hazards caused by preceding stores or traps
-                !rob.preceding_stores(load.tag())
-                    .map_ok(|store| load.has_hazard(store))
-                    .any(|hazard| hazard.unwrap_or(true))
-            })
+            .find(|(_, entry)| Self::is_entry_ready(entry, rob))
             .map(|(i, instr)| {
                 self.dequeued = Some(i);
                 instr.execute(mem)
@@ -54,6 +49,13 @@ impl LoadQueue {
     pub fn write(&mut self, results: Vec<LoadQueueEntry>) {
         debug_assert!(self.scheduled.is_empty() && !self.cleared);
         self.scheduled = results;
+    }
+
+    fn is_entry_ready(entry: &LoadQueueEntry, rob: &ReorderBuffer) -> bool {
+        // There can be no RAW hazards caused by preceding stores or traps
+        !rob.preceding_stores(entry.tag())
+            .map_ok(|store| entry.has_hazard(store))
+            .any(|hazard| hazard.unwrap_or(true))
     }
 }
 

@@ -113,6 +113,10 @@ impl Clearable for Scheduler {
 pub struct Schedulers(Box<[Scheduler]>);
 
 impl Schedulers {
+    pub fn count(&self) -> usize {
+        self.0.len()
+    }
+    
     pub(super) fn reserve(&mut self, op: OperationType) -> Option<RsLock> {
         self.0
             .iter()

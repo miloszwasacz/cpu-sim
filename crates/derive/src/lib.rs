@@ -28,3 +28,14 @@ pub fn derive_display(input: TokenStream) -> TokenStream {
 }
 
 //#endregion
+
+//#region #[derive(Focus)]
+
+mod derive_focus;
+
+#[proc_macro_derive(Focus, attributes(none))]
+pub fn derive_focus(input: TokenStream) -> TokenStream {
+    derive_focus::derive_focus(input)
+}
+
+//#endregion
