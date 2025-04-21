@@ -63,8 +63,7 @@ impl RobEntry<NotReady> {
         &self.0
     }
 
-    /// NOTE: This DOES NOT perform [`update_store_value`](Self::update_store_value)!
-    pub(super) fn update(self, result: &ExecResult) -> Result<RobEntry<Ready>, RobEntry<NotReady>> {
+    pub(super) fn update(self, result: &ExecResult) -> RobEntry<Ready> {
         macro_rules! extract_result {
             ($result:expr, $pat:pat => {
                 $( $stmt:tt )*
@@ -80,7 +79,7 @@ impl RobEntry<NotReady> {
 
         let data = match result.result {
             Ok(data) => data,
-            Err(ex) => return Ok(RobEntry(Err(EnvTrap::Exception(ex)), self.1)),
+            Err(ex) => return RobEntry(Err(EnvTrap::Exception(ex)), self.1),
         };
         let ready = match self.0 {
             NotReady::Alu { dest } => extract_result!(data, ExecResultData::Alu(value) => {
@@ -121,7 +120,7 @@ impl RobEntry<NotReady> {
             }
         };
 
-        Ok(RobEntry(Ok(ready), self.1))
+        RobEntry(Ok(ready), self.1)
     }
 }
 

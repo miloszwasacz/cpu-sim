@@ -5,6 +5,7 @@ use self::iter::Iter;
 pub(super) use self::lock::RobEntryLock;
 use super::exec_unit::ExecResult;
 use crate::components::cpu::flip_flop::{Clearable, FlipFlop, Sequential};
+use crate::components::cpu::reg::FutureFile;
 use crate::components::memory::Address;
 use crate::instr::EnvTrap;
 
@@ -74,31 +75,35 @@ impl ReorderBuffer {
         RobIndex::new(self).map(|i| RobEntryLock::new(self, i))
     }
 
-    pub fn pop_if_ready(&mut self) -> Option<(RobIndex, RobEntry<Ready>)> {
+    pub fn pop_if_ready(&mut self) -> Option<RobEntry<Ready>> {
         let head = *self.head.read();
-        self.get_mut(head).take_if_ready().map(|entry| {
+        self.get_mut(head).take_if_ready().inspect(|_| {
             self.head.write(head.add(self, 1));
             self.len.pop();
-            (head, entry)
         })
     }
 
-    pub fn update_from_cdb(&mut self, results: &[ExecResult]) {
+    pub fn update_from_cdb(&mut self, future_file: &mut FutureFile, results: &[ExecResult]) {
         for result in results {
             let holder = self.get_mut(result.tag);
-            let current = *holder.read();
-            let new = match current {
-                RobEntryHolder::NotReady(not_ready) => match not_ready.update(result) {
-                    Ok(ready) => RobEntryHolder::Ready(ready),
-                    Err(not_ready) => RobEntryHolder::NotReady(not_ready),
-                },
+            let ready = match holder.read() {
+                RobEntryHolder::NotReady(not_ready) => not_ready.update(result),
                 RobEntryHolder::Empty => unreachable!("instruction already commited"),
                 RobEntryHolder::Ready(_) => unreachable!("instruction executed more than once"),
             };
-
-            if new != current {
-                holder.write(new);
-            }
+            //TODO If the instruction produces an exception, 
+            //     the destination register in the future file will not be freed
+            let _ = ready.data().inspect(|data| match data {
+                ReadyRobEntry::Alu { dest, value }
+                | ReadyRobEntry::Load { dest, value }
+                | ReadyRobEntry::Jump {
+                    link_reg: dest,
+                    link_data: value,
+                    ..
+                } => future_file[*dest].write_result(result.tag, *value),
+                ReadyRobEntry::Branch { .. } | ReadyRobEntry::Store { .. } => {}
+            });
+            holder.write(RobEntryHolder::Ready(ready));
         }
     }
 

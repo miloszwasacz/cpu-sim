@@ -221,7 +221,7 @@ impl<'m> Cpu<'m> {
         self.id_is_regs.clear();
         self.rob.clear();
         self.schedulers.clear();
-        self.regs.stat_mut().clear();
+        self.regs.future_file_mut().clear();
         self.cdb.clear();
         self.load_queue.clear();
     }

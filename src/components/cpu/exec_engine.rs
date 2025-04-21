@@ -118,7 +118,7 @@ impl Cpu<'_> {
                 let rob_entry = RobEntry::<rob::Ready>::jump(pc, link_reg, pc_plus_4, target);
 
                 rob_lock.issue_ready(rob_entry);
-                self.regs.stat_mut()[link_reg].issue_new(rob_index);
+                self.regs.future_file_mut()[link_reg].issue_new(rob_index);
 
                 return false;
             }
@@ -178,7 +178,7 @@ impl Cpu<'_> {
             Err(not_ready) => rs_lock.issue_not_ready(not_ready),
         }
         if let Some(dest) = dest {
-            self.regs.stat_mut()[dest].issue_new(rob_index);
+            self.regs.future_file_mut()[dest].issue_new(rob_index);
         }
 
         false
@@ -222,8 +222,10 @@ impl Cpu<'_> {
     }
 
     pub fn write_result(&mut self) {
-        self.rob.update_from_cdb(self.cdb.read());
-        self.schedulers.update_from_cdb(self.cdb.read());
+        let results = self.cdb.read();
+        let future_file = self.regs.future_file_mut();
+        self.rob.update_from_cdb(future_file, results);
+        self.schedulers.update_from_cdb(results);
     }
 
     /// Returns then new PC if there was a branch misprediction.
@@ -233,7 +235,7 @@ impl Cpu<'_> {
         let mut result = Default::default();
 
         // Commit
-        let (index, entry) = match self.rob.pop_if_ready() {
+        let entry = match self.rob.pop_if_ready() {
             Some(entry) => entry,
             None => return result,
         };
@@ -248,7 +250,6 @@ impl Cpu<'_> {
         match data {
             ReadyRobEntry::Alu { dest, value } | ReadyRobEntry::Load { dest, value } => {
                 self.regs.set(dest, value);
-                self.regs.stat_mut()[dest].commit(index);
             }
             ReadyRobEntry::Jump {
                 predicted,
@@ -257,7 +258,6 @@ impl Cpu<'_> {
                 target,
             } => {
                 self.regs.set(link_reg, link_data);
-                self.regs.stat_mut()[link_reg].commit(index);
                 if predicted != target {
                     result = Some(target);
                 }

@@ -1,16 +1,16 @@
 pub use self::front_end::FrontEndModel;
+pub use self::future_file::FutureFileModel;
 pub use self::load_queue::LoadQueueModel;
 pub use self::reg_file::RegFileModel;
-pub use self::reg_stat::RegStatModel;
 pub use self::rob::RobModel;
 pub use self::schedulers::SchedulersModel;
 
 use cpu_sim::components::diagnostics::cpu::CpuSnapshot;
 
 mod front_end;
+mod future_file;
 mod load_queue;
 mod reg_file;
-mod reg_stat;
 mod rob;
 mod schedulers;
 
@@ -19,7 +19,7 @@ pub struct CpuModel {
     rob: RobModel,
     schedulers: SchedulersModel,
     reg_file: RegFileModel,
-    reg_stat: RegStatModel,
+    future_file: FutureFileModel,
     load_queue: LoadQueueModel,
 }
 
@@ -40,8 +40,8 @@ impl CpuModel {
         &self.reg_file
     }
 
-    pub fn reg_stat(&self) -> &RegStatModel {
-        &self.reg_stat
+    pub fn future_file(&self) -> &FutureFileModel {
+        &self.future_file
     }
 
     pub fn load_queue(&self) -> &LoadQueueModel {
@@ -58,7 +58,7 @@ impl From<CpuSnapshot> for CpuModel {
             rob,
             schedulers,
             reg_file,
-            reg_stat,
+            future_file,
             load_queue,
         } = snapshot;
 
@@ -66,7 +66,7 @@ impl From<CpuSnapshot> for CpuModel {
         let rob = RobModel::new(rob);
         let schedulers = SchedulersModel::new(schedulers);
         let reg_file = RegFileModel::new(reg_file);
-        let reg_stat = RegStatModel::new(reg_stat);
+        let future_file = FutureFileModel::new(future_file);
         let load_queue = LoadQueueModel::new(load_queue);
 
         Self {
@@ -74,7 +74,7 @@ impl From<CpuSnapshot> for CpuModel {
             rob,
             schedulers,
             reg_file,
-            reg_stat,
+            future_file,
             load_queue,
         }
     }

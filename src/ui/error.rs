@@ -3,6 +3,7 @@ use std::{fmt, io};
 
 #[derive(Debug)]
 pub enum SimError {
+    EarlyExit,
     Tui(io::Error),
     Cpu(Vec<Box<dyn Error>>),
 }
@@ -10,6 +11,7 @@ pub enum SimError {
 impl fmt::Display for SimError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            SimError::EarlyExit => fmt::Display::fmt("early exit", f),
             SimError::Tui(err) => fmt::Display::fmt(err, f),
             SimError::Cpu(errs) => {
                 for err in errs {

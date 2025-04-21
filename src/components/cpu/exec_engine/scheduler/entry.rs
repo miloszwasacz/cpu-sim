@@ -228,14 +228,10 @@ pub enum RegValue {
 }
 
 impl RegValue {
-    fn new(reg: RegName, regs: &RegFile) -> RegValue {
-        regs.stat()[reg]
+    fn new(reg: RegName, regs: &RegFile) -> Self {
+        regs.future_file()[reg]
             .read()
-            .map(RegValue::Rob)
-            .unwrap_or_else(|| {
-                let val = regs.get(reg);
-                RegValue::Value(val)
-            })
+            .map_or_else(Self::Rob, Self::Value)
     }
 
     fn update_from_rob(&mut self, rob: &ReorderBuffer) {

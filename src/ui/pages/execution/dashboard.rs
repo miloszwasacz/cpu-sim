@@ -1,7 +1,7 @@
 use self::front_end::FrontEnd;
 use self::load_queue::LoadQueue;
+use self::regs::future_file::FutureFile;
 use self::regs::reg_file::RegFile;
-use self::regs::reg_stat::RegStat;
 use self::rob::Rob;
 use self::schedulers::Schedulers;
 use super::EventPayload;
@@ -38,14 +38,14 @@ enum Focused {
     LoadQueue,
     Rob,
     RegFile,
-    RegStat,
+    FutureFile,
 }
 
 pub struct CpuDashboard {
     front_end: FrontEnd,
     schedulers: Schedulers,
     reg_file: RegFile,
-    reg_stat: RegStat,
+    future_file: FutureFile,
     rob: Rob,
     load_queue: LoadQueue,
     focused: Focused,
@@ -57,7 +57,7 @@ impl CpuDashboard {
             front_end: Default::default(),
             schedulers: Schedulers::new(scheduler_count),
             reg_file: Default::default(),
-            reg_stat: Default::default(),
+            future_file: Default::default(),
             rob: Default::default(),
             load_queue: Default::default(),
             focused: Default::default(),
@@ -69,8 +69,9 @@ impl StatefulComponent for CpuDashboard {
     type Model = CpuModel;
 
     fn render(&mut self, model: &Self::Model, area: Rect, buf: &mut Buffer) {
-        let [top, reg_file, reg_stat] =
-            Layout::vertical([Constraint::Fill(1), RegFile::HEIGHT, RegStat::HEIGHT]).areas(area);
+        let [top, reg_file, future_file] =
+            Layout::vertical([Constraint::Fill(1), RegFile::HEIGHT, FutureFile::HEIGHT])
+                .areas(area);
         let [left, rob] = Layout::horizontal([Constraint::Fill(1), Rob::WIDTH]).areas(top);
         let [front_end, middle] =
             Layout::vertical([FrontEnd::HEIGHT, Constraint::Fill(1)]).areas(left);
@@ -80,7 +81,8 @@ impl StatefulComponent for CpuDashboard {
         self.front_end.render(model.front_end(), front_end, buf);
         self.schedulers.render(model.schedulers(), schedulers, buf);
         self.reg_file.render(model.reg_file(), reg_file, buf);
-        self.reg_stat.render(model.reg_stat(), reg_stat, buf);
+        self.future_file
+            .render(model.future_file(), future_file, buf);
         self.rob.render(model.rob(), rob, buf);
         self.load_queue.render(model.load_queue(), load_queue, buf);
     }
@@ -99,7 +101,7 @@ impl EventHandler<EventPayload<'_, '_, '_>> for CpuDashboard {
             Focused::FrontEnd => self.front_end.handle_event(event.clone(), ()),
             Focused::Schedulers => self.schedulers.handle_event(event.clone(), ()),
             Focused::RegFile => self.reg_file.handle_event(event.clone(), ()),
-            Focused::RegStat => self.reg_stat.handle_event(event.clone(), ()),
+            Focused::FutureFile => self.future_file.handle_event(event.clone(), ()),
             Focused::Rob => self.rob.handle_event(event.clone(), ()),
             Focused::LoadQueue => self.load_queue.handle_event(event.clone(), ()),
         };
@@ -133,7 +135,7 @@ impl FocusHandler for CpuDashboard {
             Focused::FrontEnd => Some(&mut self.front_end as &mut dyn Focusable),
             Focused::Schedulers => Some(&mut self.schedulers as &mut dyn Focusable),
             Focused::RegFile => Some(&mut self.reg_file as &mut dyn Focusable),
-            Focused::RegStat => Some(&mut self.reg_stat as &mut dyn Focusable),
+            Focused::FutureFile => Some(&mut self.future_file as &mut dyn Focusable),
             Focused::Rob => Some(&mut self.rob as &mut dyn Focusable),
             Focused::LoadQueue => Some(&mut self.load_queue as &mut dyn Focusable),
         }

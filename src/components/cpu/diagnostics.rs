@@ -17,7 +17,7 @@ pub struct CpuSnapshot {
     pub rob: RobSnapshot,
     pub schedulers: Box<[SchedulerSnapshot]>,
     pub reg_file: RegFileSnapshot,
-    pub reg_stat: RegStatSnapshot,
+    pub future_file: FutureFileSnapshot,
     pub load_queue: LoadQueueSnapshot,
 }
 
@@ -32,7 +32,7 @@ impl Diagnostics for Cpu<'_> {
             rob: self.rob.diagnostics(),
             schedulers: self.schedulers.diagnostics(),
             reg_file: self.regs.diagnostics(),
-            reg_stat: self.regs.stat().diagnostics(),
+            future_file: self.regs.future_file().diagnostics(),
             load_queue: self.load_queue.diagnostics(&self.rob),
         }
     }

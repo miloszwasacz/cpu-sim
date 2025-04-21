@@ -9,19 +9,38 @@ use std::process::ExitCode;
 
 mod ui;
 
-fn main() -> Result<ExitCode, SimError> {
+fn main() -> ExitCode {
     const FILE: &str = "test/res/bin/bubble_sort";
 
     let mem = RefCell::new(Memory::new());
     //TODO Provide stand-ins for stdin, stdout, and stderr to the CPU to not break the TUI
     let mut cpu = Cpu::new(&mem);
     if let Err(err) = unsafe { Loader.load(FILE, &mut mem.borrow_mut(), &mut cpu) } {
-        panic!("{}", err);
-        // return ExitCode::FAILURE;
+        eprintln!("Load error: {}", err);
+        return ExitCode::FAILURE;
     }
 
-    let exit_code = App::new(&mut cpu).run()?;
-    Ok(ExitCode::from(exit_code as u8))
+    match App::new(&mut cpu).run() {
+        Ok(exit_code) => {
+            println!("Simulation finished (exit code: {})", exit_code);
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            match err {
+                SimError::EarlyExit => {
+                    eprintln!("Simulation stopped early");
+                }
+                SimError::Tui(err) => eprintln!("TUI error: {}", err),
+                SimError::Cpu(errs) => {
+                    eprintln!("Simulation errors:");
+                    for err in errs {
+                        eprintln!("  {}", err);
+                    }
+                }
+            }
+            ExitCode::FAILURE
+        }
+    }
 
     // loop {
     //     match cpu.run() {

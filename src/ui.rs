@@ -82,8 +82,7 @@ impl<'c, 'm> App<'c, 'm> {
                     let result = match exec_page.handle_event(event.clone(), ()) {
                         EventResult::Ignored => match event {
                             Event::Resize(_, _) => Ok(None),
-                            //TODO Constant for early exit
-                            Event::Key(event) if is_ctrl_c(event) => Ok(Some(1)),
+                            Event::Key(event) if is_ctrl_c(event) => Err(SimError::EarlyExit),
                             Event::Key(event) if event.kind == KeyEventKind::Press => {
                                 match event.code {
                                     KeyCode::Tab => {
