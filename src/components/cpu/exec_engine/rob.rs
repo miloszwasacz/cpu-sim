@@ -2,7 +2,7 @@ pub(super) use self::entry::{NotReady, Ready, ReadyRobEntry, RobEntry};
 use self::flip_flop::RobLenFlipFlop;
 pub use self::index::RobIndex;
 use self::iter::Iter;
-pub(super) use self::lock::RobEntryLock;
+pub(super) use self::lock::RobLock;
 use super::exec_unit::ExecResult;
 use crate::components::cpu::flip_flop::{Clearable, FlipFlop, Sequential};
 use crate::components::cpu::reg::FutureFile;
@@ -69,10 +69,8 @@ impl ReorderBuffer {
         self.buffer.len()
     }
 
-    /// Tries to reserve a new entry in the _ROB_.
-    /// Returns [`None`] if the _ROB_ is full.
-    pub(super) fn reserve(&mut self) -> Option<RobEntryLock> {
-        RobIndex::new(self).map(|i| RobEntryLock::new(self, i))
+    pub(super) fn lock(&mut self) -> RobLock {
+        RobLock::new(self)
     }
 
     pub fn pop_if_ready(&mut self) -> Option<RobEntry<Ready>> {
@@ -91,7 +89,7 @@ impl ReorderBuffer {
                 RobEntryHolder::Empty => unreachable!("instruction already commited"),
                 RobEntryHolder::Ready(_) => unreachable!("instruction executed more than once"),
             };
-            //TODO If the instruction produces an exception, 
+            //TODO If the instruction produces an exception,
             //     the destination register in the future file will not be freed
             let _ = ready.data().inspect(|data| match data {
                 ReadyRobEntry::Alu { dest, value }

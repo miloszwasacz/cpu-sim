@@ -3,12 +3,13 @@ use self::exec_engine::{
     CommonDataBus, ExecUnit, OperationType, ReorderBuffer, RobIndex, Scheduler, Schedulers,
 };
 use self::flip_flop::{Clearable, Sequential, StallingFlipFlop};
-use self::front_end::{Decoder, JumpAgu, PcAdder};
+use self::front_end::{DecodeQueue, Decoder, JumpAgu, PcAdder};
 use self::mem_subsystem::LoadQueue;
-use self::reg::pipeline::{IdIsRegs, IfIdRegs};
+use self::reg::pipeline::IfIdRegs;
 use self::reg::{RegFile, RegName};
 use super::memory::{Address, Memory};
 use super::Bus;
+use crate::config::Immutable;
 use crate::instr::{EnvTrap, SyscallCode};
 use crate::os::Os;
 
@@ -25,6 +26,9 @@ mod mem_subsystem;
 pub(crate) mod reg;
 
 //TODO Make configurable
+const DECODE_WIDTH: NonZeroUsize = NonZeroUsize::new(4).unwrap();
+const DECODE_QUEUE_CAPACITY: NonZeroUsize = NonZeroUsize::new(16).unwrap();
+const ISSUE_WIDTH: Immutable<NonZeroUsize> = Immutable::new(NonZeroUsize::new(4).unwrap());
 const ROB_CAPACITY: NonZeroUsize = NonZeroUsize::new(96).unwrap();
 const SCHEDULER_CAPACITY: NonZeroUsize = NonZeroUsize::new(16).unwrap();
 const LOAD_QUEUE_CAPACITY: NonZeroUsize = NonZeroUsize::new(20).unwrap();
@@ -51,16 +55,17 @@ pub struct Cpu<'m> {
     pc: StallingFlipFlop<Pc>,
     pc_adder: PcAdder,
     instr_mem: Bus<'m, Memory>,
-    if_id_regs: StallingFlipFlop<Option<IfIdRegs>>,
-    decoder: Decoder,
-    jump_agu: JumpAgu,
-    id_is_regs: StallingFlipFlop<Option<IdIsRegs>>,
+    if_id_regs: StallingFlipFlop<Box<[IfIdRegs]>>,
+    decoders: Box<[Decoder]>,
+    jump_agus: Box<[JumpAgu]>,
+    decode_queue: DecodeQueue,
 
     // Execution Engine
+    issue_width: Immutable<NonZeroUsize>,
     rob: ReorderBuffer,
     schedulers: Schedulers,
     regs: RegFile,
-    exec_units: Vec<ExecUnit>,
+    exec_units: Box<[ExecUnit]>,
     cdb: CommonDataBus,
 
     // Memory Subsystem
@@ -78,6 +83,7 @@ impl<'m> Cpu<'m> {
         //TODO Get schedulers & exec units from config
         let schedulers: Schedulers = [
             OperationType::ALU,
+            OperationType::ALU,
             OperationType::BRANCH,
             OperationType::LOAD,
             OperationType::STORE,
@@ -85,23 +91,27 @@ impl<'m> Cpu<'m> {
         .into_iter()
         .map(|op| Scheduler::new(op, SCHEDULER_CAPACITY))
         .collect();
-        let exec_units = (&schedulers).into();
+        let exec_units = Vec::from(&schedulers).into_boxed_slice();
 
         Self {
             pc: StallingFlipFlop::new(Pc::default()),
             pc_adder: PcAdder::new(),
             instr_mem: mem_bus,
-            if_id_regs: StallingFlipFlop::new(None),
-            decoder: Decoder::new(),
-            jump_agu: JumpAgu::new(),
-            id_is_regs: StallingFlipFlop::new(None),
+            if_id_regs: StallingFlipFlop::new(vec![].into_boxed_slice()),
+            decoders: vec![Decoder::new(); DECODE_WIDTH.get()].into_boxed_slice(),
+            jump_agus: vec![JumpAgu::new(); DECODE_WIDTH.get()].into_boxed_slice(),
+            decode_queue: DecodeQueue::with_capacity(DECODE_QUEUE_CAPACITY),
+
+            issue_width: ISSUE_WIDTH,
             rob: ReorderBuffer::with_capacity(ROB_CAPACITY),
             schedulers,
             regs: Default::default(),
             exec_units,
             cdb: CommonDataBus::new(),
+
             load_queue: LoadQueue::with_capacity(LOAD_QUEUE_CAPACITY),
             data_mem: mem_bus,
+
             cycle_result: Default::default(),
             os: Os::new(),
             exit: false,
@@ -183,9 +193,9 @@ impl<'m> Cpu<'m> {
     }
 
     fn clock_cycle(&mut self) -> CycleResult {
-        let pc_plus_4 = self.fetch();
-        let jump = self.decode();
-        let stall = self.issue();
+        let new_pc = self.fetch();
+        let stall = self.decode();
+        self.issue();
         self.execute();
         self.write_result();
         let mispredicted = self.commit();
@@ -199,15 +209,8 @@ impl<'m> Cpu<'m> {
             None if stall => {
                 self.pc.stall();
                 self.if_id_regs.stall();
-                self.id_is_regs.stall();
             }
-            None => self.pc.write(match jump {
-                Some(jump) => {
-                    self.if_id_regs.clear();
-                    jump
-                }
-                None => pc_plus_4,
-            }),
+            None => self.pc.write(new_pc),
         }
         self.finish_cycle();
 
@@ -218,7 +221,7 @@ impl<'m> Cpu<'m> {
         //TODO Flush as early as possible (i.e. before commit)
         //     and clear only entries after the mispredicted one
         self.if_id_regs.clear();
-        self.id_is_regs.clear();
+        self.decode_queue.clear();
         self.rob.clear();
         self.schedulers.clear();
         self.regs.future_file_mut().clear();
@@ -296,7 +299,7 @@ impl Sequential for Cpu<'_> {
     fn finish_cycle(&mut self) {
         self.pc.finish_cycle();
         self.if_id_regs.finish_cycle();
-        self.id_is_regs.finish_cycle();
+        self.decode_queue.finish_cycle();
         self.rob.finish_cycle();
         self.schedulers.finish_cycle();
         self.regs.finish_cycle();

@@ -4,6 +4,7 @@ use super::exec_unit::ExecResult;
 use super::{OperationType, ReorderBuffer};
 use crate::components::cpu::flip_flop::{Clearable, FlipFlop, Sequential};
 
+use std::collections::HashSet;
 use std::num::NonZeroUsize;
 use std::slice::{Iter, IterMut};
 
@@ -110,28 +111,31 @@ impl Clearable for Scheduler {
 //#region Schedulers
 
 #[derive(Debug)]
-pub struct Schedulers(Box<[Scheduler]>);
+pub struct Schedulers {
+    schedulers: Box<[Scheduler]>,
+    reserved: HashSet<usize>,
+}
 
 impl Schedulers {
     pub fn count(&self) -> usize {
-        self.0.len()
+        self.schedulers.len()
     }
-    
+
     pub(super) fn reserve(&mut self, op: OperationType) -> Option<RsLock> {
-        self.0
+        self.schedulers
             .iter()
             .enumerate()
-            .filter(|(_, s)| s.ops.contains(op))
+            .filter(|(si, s)| !self.reserved.contains(si) && s.ops.contains(op))
             .find_map(|(si, s)| s.find_empty().map(|rs| (si, rs)))
             .map(|(si, rs)| RsLock::new(self, si, rs))
     }
 
     pub(super) fn iter(&self) -> Iter<Scheduler> {
-        self.0.iter()
+        self.schedulers.iter()
     }
 
     pub(super) fn iter_mut(&mut self) -> IterMut<Scheduler> {
-        self.0.iter_mut()
+        self.schedulers.iter_mut()
     }
 
     pub(super) fn update_from_cdb(&mut self, results: &[ExecResult]) {
@@ -139,7 +143,7 @@ impl Schedulers {
             return;
         }
 
-        self.0
+        self.schedulers
             .iter_mut()
             .flat_map(|s| s.entries.iter_mut())
             .for_each(|rs| {
@@ -159,17 +163,19 @@ impl Schedulers {
 
 impl Sequential for Schedulers {
     fn finish_cycle(&mut self) {
-        for s in &mut self.0 {
+        for s in &mut self.schedulers {
             s.finish_cycle();
         }
+        self.reserved.clear();
     }
 }
 
 impl Clearable for Schedulers {
     fn clear(&mut self) {
-        for s in &mut self.0 {
+        for s in &mut self.schedulers {
             s.clear();
         }
+        self.reserved.clear();
     }
 }
 
@@ -177,7 +183,10 @@ impl FromIterator<Scheduler> for Schedulers {
     fn from_iter<T: IntoIterator<Item = Scheduler>>(iter: T) -> Self {
         let mut v = iter.into_iter().collect::<Vec<_>>();
         v.sort_unstable_by_key(|s| s.ops.bits());
-        Self(v.into_boxed_slice())
+        Self {
+            schedulers: v.into_boxed_slice(),
+            reserved: Default::default(),
+        }
     }
 }
 

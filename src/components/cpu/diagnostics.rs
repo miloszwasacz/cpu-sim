@@ -1,10 +1,12 @@
 pub use super::error::Exception;
 pub use super::exec_engine::diagnostics::*;
+pub use super::front_end::diagnostics::*;
 pub use super::mem_subsystem::diagnostics::*;
 pub use super::reg::diagnostics::*;
 pub use super::reg::pipeline::{IdIsRegs, IfIdRegs};
 pub use super::AluControl;
 pub use crate::instr::full::FullInstruction as Instruction;
+pub use crate::instr::raw::RawInstr;
 pub use crate::instr::Branch;
 
 use super::{Cpu, Pc};
@@ -12,8 +14,9 @@ use crate::components::diagnostics::Diagnostics;
 
 pub struct CpuSnapshot {
     pub pc: Pc,
-    pub if_id_regs: Option<IfIdRegs>,
-    pub id_is_regs: Option<IdIsRegs>,
+    pub if_id_regs: Box<[Result<RawInstr, Exception>]>,
+    pub decode_width: usize,
+    pub decode_queue: DecodeQueueSnapshot,
     pub rob: RobSnapshot,
     pub schedulers: Box<[SchedulerSnapshot]>,
     pub reg_file: RegFileSnapshot,
@@ -27,8 +30,9 @@ impl Diagnostics for Cpu<'_> {
     fn diagnostics(&self) -> Self::Output {
         Self::Output {
             pc: *self.pc.read(),
-            if_id_regs: *self.if_id_regs.read(),
-            id_is_regs: *self.id_is_regs.read(),
+            if_id_regs: self.if_id_regs.read().iter().map(|reg| reg.instr).collect(),
+            decode_width: self.decoders.len(),
+            decode_queue: self.decode_queue.diagnostics(),
             rob: self.rob.diagnostics(),
             schedulers: self.schedulers.diagnostics(),
             reg_file: self.regs.diagnostics(),

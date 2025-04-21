@@ -36,7 +36,8 @@ impl<'a> RsLock<'a> {
             scheduler_index,
             rs_index,
         } = self;
-        let rs = &mut schedulers.0[scheduler_index].entries[rs_index];
+        let rs = &mut schedulers.schedulers[scheduler_index].entries[rs_index];
+        schedulers.reserved.insert(scheduler_index);
         debug_assert!(rs.read().is_empty());
         rs
     }

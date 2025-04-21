@@ -53,6 +53,6 @@ impl Diagnostics for Schedulers {
     type Output = Box<[SchedulerSnapshot]>;
 
     fn diagnostics(&self) -> Self::Output {
-        self.0.iter().map(Scheduler::diagnostics).collect()
+        self.schedulers.iter().map(Scheduler::diagnostics).collect()
     }
 }

@@ -6,10 +6,10 @@ pub use self::scheduler::{Scheduler, Schedulers};
 use self::exec_unit::ExecResultData;
 use self::rob::{ReadyRobEntry, RobEntry};
 use self::scheduler::{self as rs, RsEntry};
+use super::front_end::decode_queue::Decoded;
 use super::mem_subsystem::LoadQueueEntry;
-use super::reg::pipeline::IdIsRegs;
 use super::reg::RegData;
-use super::{Cpu, Stall};
+use super::Cpu;
 use crate::components::memory::Address;
 use crate::instr::{AluSrcA, Instruction};
 
@@ -35,7 +35,7 @@ bitflags! {
 }
 
 impl Instruction {
-    const fn ty(&self) -> OperationType {
+    pub(super) const fn ty(&self) -> OperationType {
         match self {
             Instruction::Alu { .. } | Instruction::Jump { .. } | Instruction::EnvTrap(_) => {
                 OperationType::ALU
@@ -50,138 +50,146 @@ impl Instruction {
 //#endregion
 
 impl Cpu<'_> {
-    #[must_use]
-    pub(super) fn issue(&mut self) -> Stall {
-        let IdIsRegs {
-            instr,
-            pc,
-            pc_plus_4,
-            predicted,
-            target,
-        } = match self.id_is_regs.read() {
-            Some(regs) => *regs,
-            None => return false,
-        };
-        let pc_plus_4 = RegData::address(pc_plus_4);
+    pub(super) fn issue(&mut self) {
+        let mut decoded = self.decode_queue.pop();
+        let mut rob_lock = self.rob.lock();
+        let mut future_file_lock = self.regs.future_file_mut().issue_lock();
+        for priority in 0..self.issue_width.get() {
+            let rob_entry_lock = match rob_lock.reserve() {
+                Some(lock) => lock,
+                None => break,
+            };
+            let decoded_lock = match decoded.head() {
+                Some(Ok(decoded)) => decoded,
+                Some(Err((ex, pc))) => {
+                    let rob_entry = RobEntry::<rob::Ready>::env_trap(pc, ex.into());
+                    rob_entry_lock.issue_ready(rob_entry);
+                    break;
+                }
+                None => break,
+            };
+            let rs_lock = match self.schedulers.reserve(decoded_lock.ty()) {
+                Some(rs_lock) => rs_lock,
+                _ => break,
+            };
 
-        let rob_lock = match self.rob.reserve() {
-            Some(lock) => lock,
-            None => return true,
-        };
-        let instr = match instr {
-            Ok((instr, _)) => instr,
-            Err(ex) => {
-                let rob_entry = RobEntry::<rob::Ready>::env_trap(pc, ex.into());
-                rob_lock.issue_ready(rob_entry);
-                return false;
-            }
-        };
-        let rs_lock = match self.schedulers.reserve(instr.ty()) {
-            Some(rs_lock) => rs_lock,
-            _ => return true,
-        };
+            let Decoded {
+                instr,
+                pc,
+                pc_plus_4,
+                predicted,
+                target,
+                ..
+            } = decoded_lock.issue();
+            let pc_plus_4 = RegData::address(pc_plus_4);
 
-        let rob_index = rob_lock.index();
-        let (rob_entry, rs_entry_data, dest) = match instr {
-            Instruction::Alu {
-                ctrl,
-                src1,
-                src2,
-                dest,
-            } => {
-                let src1 = match src1 {
-                    AluSrcA::Reg(src1) => Ok(src1),
-                    AluSrcA::Pc => Err(pc),
-                };
+            let rob_index = rob_entry_lock.index();
+            let (rob_entry, rs_entry_data, dest, jump) = match instr {
+                Instruction::Alu {
+                    ctrl,
+                    src1,
+                    src2,
+                    dest,
+                } => {
+                    let src1 = match src1 {
+                        AluSrcA::Reg(src1) => Ok(src1),
+                        AluSrcA::Pc => Err(pc),
+                    };
 
-                let rob_entry = RobEntry::alu(pc, dest);
-                let rs_entry_data = rs::NotReady::alu(ctrl, src1, src2, &self.regs);
-                (rob_entry, rs_entry_data, Some(dest))
-            }
-            Instruction::Jump {
-                base: AluSrcA::Reg(base),
-                offset,
-                apply_mask,
-                link_reg,
-            } => {
-                let predicted = predicted.expect("non-pc-based jumps should be predicted");
-                let rob_entry = RobEntry::<rob::NotReady>::jump(pc, predicted, link_reg, pc_plus_4);
-                let rs_entry_data = rs::NotReady::jump(base, offset, apply_mask, &self.regs);
-                (rob_entry, rs_entry_data, Some(link_reg))
-            }
-            Instruction::Jump { link_reg, .. } => {
-                // PC-based jumps require no execution, and therefore no reservation stations
-                #[allow(clippy::drop_non_drop)]
-                drop(rs_lock);
+                    let rob_entry = RobEntry::alu(pc, dest);
+                    let rs_entry_data = rs::NotReady::alu(ctrl, src1, src2, &future_file_lock);
+                    (rob_entry, rs_entry_data, Some(dest), false)
+                }
+                Instruction::Jump {
+                    base: AluSrcA::Reg(base),
+                    offset,
+                    apply_mask,
+                    link_reg,
+                } => {
+                    let predicted = predicted.expect("non-pc-based jumps should be predicted");
+                    let rob_entry =
+                        RobEntry::<rob::NotReady>::jump(pc, predicted, link_reg, pc_plus_4);
+                    let rs_entry_data =
+                        rs::NotReady::jump(base, offset, apply_mask, &future_file_lock);
+                    (rob_entry, rs_entry_data, Some(link_reg), true)
+                }
+                Instruction::Jump { link_reg, .. } => {
+                    // PC-based jumps require no execution, and therefore no reservation stations
+                    #[allow(clippy::drop_non_drop)]
+                    drop(rs_lock);
 
-                let target = predicted.expect("pc-based jumps should have pre-computed target");
-                let rob_entry = RobEntry::<rob::Ready>::jump(pc, link_reg, pc_plus_4, target);
+                    let target = predicted.expect("pc-based jumps should have pre-computed target");
+                    let rob_entry = RobEntry::<rob::Ready>::jump(pc, link_reg, pc_plus_4, target);
 
-                rob_lock.issue_ready(rob_entry);
-                self.regs.future_file_mut()[link_reg].issue_new(rob_index);
+                    rob_entry_lock.issue_ready(rob_entry);
+                    future_file_lock.issue_new(link_reg, rob_index, priority);
 
-                return false;
-            }
-            Instruction::EnvTrap(trap) => {
-                // Trap instructions require no execution, and therefore no reservation stations
-                #[allow(clippy::drop_non_drop)]
-                drop(rs_lock);
+                    break;
+                }
+                Instruction::EnvTrap(trap) => {
+                    // Trap instructions require no execution, and therefore no reservation stations
+                    #[allow(clippy::drop_non_drop)]
+                    drop(rs_lock);
 
-                let rob_entry = RobEntry::<rob::Ready>::env_trap(pc, trap);
-                rob_lock.issue_ready(rob_entry);
-                return false;
-            }
-            Instruction::Branch {
-                ctrl,
-                src1,
-                src2,
-                offset: _,
-            } => {
-                let predicted = predicted.expect("branches should be predicted");
-                let target = target.expect("branches should have pre-computed target");
-                let rob_entry = RobEntry::branch(pc, predicted == target, target);
-                let rs_entry_data = rs::NotReady::branch(ctrl, src1, src2, &self.regs);
-                (rob_entry, rs_entry_data, None)
-            }
-            Instruction::Load {
-                load,
-                byte_count,
-                base,
-                offset,
-                dest,
-            } => {
-                let rob_entry = RobEntry::load(pc, dest);
-                let rs_entry_data = rs::NotReady::load(load, byte_count, base, offset, &self.regs);
-                (rob_entry, rs_entry_data, Some(dest))
-            }
-            Instruction::Store {
-                store,
-                byte_count,
-                src,
-                base,
-                offset,
-            } => {
-                let rob_entry = RobEntry::store(pc, store, byte_count, src);
-                let rs_entry_data = rs::NotReady::store(base, offset, &self.regs);
-                (rob_entry, rs_entry_data, None)
-            }
-        };
-        let rs_entry = RsEntry {
-            dest: rob_index,
-            data: rs_entry_data,
-            op_type: instr.ty(),
-        };
+                    let rob_entry = RobEntry::<rob::Ready>::env_trap(pc, trap);
+                    rob_entry_lock.issue_ready(rob_entry);
+                    break;
+                }
+                Instruction::Branch {
+                    ctrl,
+                    src1,
+                    src2,
+                    offset: _,
+                } => {
+                    let predicted = predicted.expect("branches should be predicted");
+                    let target = target.expect("branches should have pre-computed target");
+                    let rob_entry = RobEntry::branch(pc, predicted == target, target);
+                    let rs_entry_data = rs::NotReady::branch(ctrl, src1, src2, &future_file_lock);
+                    (rob_entry, rs_entry_data, None, true)
+                }
+                Instruction::Load {
+                    load,
+                    byte_count,
+                    base,
+                    offset,
+                    dest,
+                } => {
+                    let rob_entry = RobEntry::load(pc, dest);
+                    let rs_entry_data =
+                        rs::NotReady::load(load, byte_count, base, offset, &future_file_lock);
+                    (rob_entry, rs_entry_data, Some(dest), false)
+                }
+                Instruction::Store {
+                    store,
+                    byte_count,
+                    src,
+                    base,
+                    offset,
+                } => {
+                    let rob_entry = RobEntry::store(pc, store, byte_count, src);
+                    let rs_entry_data = rs::NotReady::store(base, offset, &future_file_lock);
+                    (rob_entry, rs_entry_data, None, false)
+                }
+            };
+            let rs_entry = RsEntry {
+                dest: rob_index,
+                data: rs_entry_data,
+                op_type: instr.ty(),
+            };
 
-        rob_lock.issue_not_ready(rob_entry);
-        match rs_entry.bypass(&self.rob, &self.cdb) {
-            Ok(ready) => rs_lock.issue_ready(ready),
-            Err(not_ready) => rs_lock.issue_not_ready(not_ready),
+            rob_entry_lock.issue_not_ready(rob_entry);
+            match rs_entry.bypass(&rob_lock, &self.cdb) {
+                Ok(ready) => rs_lock.issue_ready(ready),
+                Err(not_ready) => rs_lock.issue_not_ready(not_ready),
+            }
+            if let Some(dest) = dest {
+                future_file_lock.issue_new(dest, rob_index, priority);
+            }
+
+            if jump {
+                break;
+            }
         }
-        if let Some(dest) = dest {
-            self.regs.future_file_mut()[dest].issue_new(rob_index);
-        }
-
-        false
     }
 
     pub(super) fn execute(&mut self) {

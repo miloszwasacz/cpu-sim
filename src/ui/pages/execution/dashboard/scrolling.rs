@@ -56,12 +56,12 @@ impl<E, M: ScrollingModel<Entry = E>, const H: u16> Scrolling<M, H> {
         let height = block.inner(area).height;
         let count = (height / H) as usize;
 
-        let entries = model.entries();
-        if self.head.saturating_add(count) > entries.len() {
-            self.head = entries.len().saturating_sub(count);
+        let entries_count = model.count();
+        if self.head.saturating_add(count) > entries_count {
+            self.head = entries_count.saturating_sub(count);
         }
 
-        let items = entries_to_items(entries.iter()).skip(self.head);
+        let items = entries_to_items(model.entries().iter()).skip(self.head);
         let list = List::new(items).block(block);
         Widget::render(list, area, buf);
     }
@@ -114,5 +114,10 @@ impl<M, const H: u16> Focusable for Scrolling<M, H> {
 
 pub(super) trait ScrollingModel {
     type Entry;
+
     fn entries(&self) -> &[Self::Entry];
+
+    fn count(&self) -> usize {
+        self.entries().len()
+    }
 }

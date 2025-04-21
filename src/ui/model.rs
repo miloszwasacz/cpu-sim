@@ -1,3 +1,4 @@
+pub use self::decode_queue::{DecodeQueueModel, Decoded};
 pub use self::front_end::FrontEndModel;
 pub use self::future_file::FutureFileModel;
 pub use self::load_queue::LoadQueueModel;
@@ -7,6 +8,7 @@ pub use self::schedulers::SchedulersModel;
 
 use cpu_sim::components::diagnostics::cpu::CpuSnapshot;
 
+mod decode_queue;
 mod front_end;
 mod future_file;
 mod load_queue;
@@ -16,6 +18,7 @@ mod schedulers;
 
 pub struct CpuModel {
     front_end: FrontEndModel,
+    decode_queue: DecodeQueueModel,
     rob: RobModel,
     schedulers: SchedulersModel,
     reg_file: RegFileModel,
@@ -26,6 +29,10 @@ pub struct CpuModel {
 impl CpuModel {
     pub fn front_end(&self) -> &FrontEndModel {
         &self.front_end
+    }
+
+    pub fn decode_queue(&self) -> &DecodeQueueModel {
+        &self.decode_queue
     }
 
     pub fn rob(&self) -> &RobModel {
@@ -54,7 +61,8 @@ impl From<CpuSnapshot> for CpuModel {
         let CpuSnapshot {
             pc,
             if_id_regs,
-            id_is_regs,
+            decode_width,
+            decode_queue,
             rob,
             schedulers,
             reg_file,
@@ -62,7 +70,8 @@ impl From<CpuSnapshot> for CpuModel {
             load_queue,
         } = snapshot;
 
-        let front_end = FrontEndModel::new(pc, if_id_regs, id_is_regs);
+        let front_end = FrontEndModel::new(pc, if_id_regs, decode_width);
+        let decode_queue = DecodeQueueModel::new(decode_queue);
         let rob = RobModel::new(rob);
         let schedulers = SchedulersModel::new(schedulers);
         let reg_file = RegFileModel::new(reg_file);
@@ -71,6 +80,7 @@ impl From<CpuSnapshot> for CpuModel {
 
         Self {
             front_end,
+            decode_queue,
             rob,
             schedulers,
             reg_file,

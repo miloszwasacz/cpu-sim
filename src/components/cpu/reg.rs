@@ -1,6 +1,7 @@
 pub use self::data::{DataType, RegData};
 pub use self::name::RegName;
 pub use self::reg_file::{RegFile, FutureFile};
+pub(super) use self::reg_file::FutureFileIssueLock;
 use super::flip_flop::{FlipFlop, Sequential};
 use crate::instr::raw::REG_LEN;
 

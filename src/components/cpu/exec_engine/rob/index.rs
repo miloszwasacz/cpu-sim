@@ -6,14 +6,14 @@ pub struct RobIndex(usize);
 
 impl RobIndex {
     /// Creates a new [`ReorderBuffer`] index pointing to the first empty
-    /// space after the last element in the _ROB_.
+    /// space after the last element in the _ROB_ + `offset`.
     /// Returns [`None`] if the _ROB_ is full.
     ///
     /// # Panics
     ///
     /// This function will panic if the _ROB_'s capacity is zero.
-    pub(super) fn new(rob: &ReorderBuffer) -> Option<Self> {
-        let len = rob.len.read();
+    pub(super) fn new(rob: &ReorderBuffer, offset: usize) -> Option<Self> {
+        let len = rob.len.read() + offset;
         if len == rob.capacity() {
             None
         } else {

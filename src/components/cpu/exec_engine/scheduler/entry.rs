@@ -1,7 +1,7 @@
 use crate::components::cpu::exec_engine::exec_unit::{ExecResult, ExecResultData};
 use crate::components::cpu::exec_engine::rob::{ReadyRobEntry, RobIndex};
 use crate::components::cpu::exec_engine::{CommonDataBus, OperationType, ReorderBuffer};
-use crate::components::cpu::reg::{RegData, RegFile, RegName};
+use crate::components::cpu::reg::{FutureFileIssueLock as FutureFile, RegData, RegName};
 use crate::components::cpu::{AluControl, Pc};
 use crate::instr::mem_access::MemRead;
 use crate::instr::{AluSrcB, Branch, Immediate};
@@ -167,21 +167,31 @@ pub enum RsEntryData<V: RsEntrySrc> {
 }
 
 impl NotReady {
-    pub fn alu(ctrl: AluControl, src1: Result<RegName, Pc>, src2: AluSrcB, regs: &RegFile) -> Self {
+    pub(in crate::components::cpu::exec_engine) fn alu(
+        ctrl: AluControl,
+        src1: Result<RegName, Pc>,
+        src2: AluSrcB,
+        future_file: &FutureFile,
+    ) -> Self {
         let src1 = match src1 {
-            Ok(src1) => RegValue::new(src1, regs),
+            Ok(src1) => RegValue::new(src1, future_file),
             Err(src1) => RegValue::Value(RegData::address(src1)),
         };
         let src2 = match src2 {
-            AluSrcB::Reg(src2) => RegValue::new(src2, regs),
+            AluSrcB::Reg(src2) => RegValue::new(src2, future_file),
             AluSrcB::Imm(src2) => RegValue::Value(RegData::signed(src2)),
         };
         Self::Alu { ctrl, src1, src2 }
     }
 
     // PC-based jumps don't need RS
-    pub fn jump(base: RegName, offset: Immediate, apply_mask: bool, regs: &RegFile) -> Self {
-        let base = RegValue::new(base, regs);
+    pub(in crate::components::cpu::exec_engine) fn jump(
+        base: RegName,
+        offset: Immediate,
+        apply_mask: bool,
+        future_file: &FutureFile,
+    ) -> Self {
+        let base = RegValue::new(base, future_file);
         Self::Jump {
             base,
             offset,
@@ -189,20 +199,25 @@ impl NotReady {
         }
     }
 
-    pub fn branch(ctrl: Branch, src1: RegName, src2: RegName, regs: &RegFile) -> Self {
-        let src1 = RegValue::new(src1, regs);
-        let src2 = RegValue::new(src2, regs);
+    pub(in crate::components::cpu::exec_engine) fn branch(
+        ctrl: Branch,
+        src1: RegName,
+        src2: RegName,
+        future_file: &FutureFile,
+    ) -> Self {
+        let src1 = RegValue::new(src1, future_file);
+        let src2 = RegValue::new(src2, future_file);
         Self::Branch { ctrl, src1, src2 }
     }
 
-    pub fn load(
+    pub(in crate::components::cpu::exec_engine) fn load(
         load: MemRead,
         byte_count: usize,
         base: RegName,
         offset: Immediate,
-        regs: &RegFile,
+        future_file: &FutureFile,
     ) -> Self {
-        let base = RegValue::new(base, regs);
+        let base = RegValue::new(base, future_file);
         Self::Load1 {
             load,
             byte_count,
@@ -211,8 +226,12 @@ impl NotReady {
         }
     }
 
-    pub fn store(base: RegName, offset: Immediate, regs: &RegFile) -> Self {
-        let base = RegValue::new(base, regs);
+    pub(in crate::components::cpu::exec_engine) fn store(
+        base: RegName,
+        offset: Immediate,
+        future_file: &FutureFile,
+    ) -> Self {
+        let base = RegValue::new(base, future_file);
         Self::Store { base, offset }
     }
 }
@@ -228,10 +247,8 @@ pub enum RegValue {
 }
 
 impl RegValue {
-    fn new(reg: RegName, regs: &RegFile) -> Self {
-        regs.future_file()[reg]
-            .read()
-            .map_or_else(Self::Rob, Self::Value)
+    fn new(reg: RegName, future_file: &FutureFile) -> Self {
+        future_file.read(reg).map_or_else(Self::Rob, Self::Value)
     }
 
     fn update_from_rob(&mut self, rob: &ReorderBuffer) {

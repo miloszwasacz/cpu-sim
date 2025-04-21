@@ -1,5 +1,5 @@
 use super::scrolling::{Scrolling, ScrollingModel};
-use super::{NOT_READY_COLOR, READY_COLOR};
+use super::{EXCEPTION_COLOR, NOT_READY_COLOR, READY_COLOR};
 use crate::ui::model::RobModel;
 use crate::ui::StatefulComponent;
 
@@ -13,7 +13,6 @@ use ratatui::prelude::*;
 const MISPREDICTED_COLOR: Color = Color::LightMagenta;
 const SYSCALL_COLOR: Color = Color::LightBlue;
 const BREAK_COLOR: Color = Color::Cyan;
-const EXCEPTION_COLOR: Color = Color::Yellow;
 
 pub type Rob = Scrolling<RobModel>;
 

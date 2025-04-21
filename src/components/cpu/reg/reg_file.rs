@@ -84,6 +84,15 @@ impl From<&RegFile> for super::diagnostics::RegFileSnapshot {
 #[derive(Debug, Clone)]
 pub struct FutureFile([RegStat; ARCH_REG_COUNT]);
 
+impl FutureFile {
+    pub(in crate::components::cpu) fn issue_lock(&mut self) -> FutureFileIssueLock {
+        FutureFileIssueLock {
+            file: self,
+            issued: [None; ARCH_REG_COUNT],
+        }
+    }
+}
+
 impl Default for FutureFile {
     fn default() -> Self {
         let mut future = Self(Default::default());
@@ -132,6 +141,49 @@ impl From<&FutureFile> for FutureFileSnapshot {
 
 //#endregion
 
+//#region FutureFileIssueLock
+
+pub(in crate::components::cpu) struct FutureFileIssueLock<'a> {
+    file: &'a mut FutureFile,
+    issued: [Option<(usize, RobIndex)>; ARCH_REG_COUNT],
+}
+
+//TODO Add a note mentioning that the destructor HAS TO RUN to issue the new instructions
+impl FutureFileIssueLock<'_> {
+    pub fn read(&self, reg: RegName) -> Result<RegData, RobIndex> {
+        self.issued[reg.0]
+            .map(|(_, index)| index)
+            .map(Err)
+            .unwrap_or_else(|| self.file[reg].read())
+    }
+
+    pub fn issue_new(&mut self, reg: RegName, index: RobIndex, priority: usize) {
+        let stat = &self.file[reg];
+        debug_assert!(!stat.cleared);
+
+        if !stat.zero {
+            self.issued[reg.0] = match self.issued[reg.0] {
+                Some((p, _)) if p < priority => Some((priority, index)),
+                None => Some((priority, index)),
+                issued => issued,
+            }
+        }
+    }
+}
+
+impl Drop for FutureFileIssueLock<'_> {
+    fn drop(&mut self) {
+        self.file
+            .0
+            .iter_mut()
+            .zip(self.issued.iter())
+            .filter_map(|(stat, new)| new.map(|(_, new)| (stat, new)))
+            .for_each(|(stat, new)| stat.issue_new(new));
+    }
+}
+
+//#endregion
+
 //#region RegStat
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -162,7 +214,7 @@ impl RegStat {
         self.writing.map(Err).unwrap_or(Ok(self.data))
     }
 
-    pub fn issue_new(&mut self, index: RobIndex) {
+    fn issue_new(&mut self, index: RobIndex) {
         debug_assert!(self.issued.is_none() && !self.cleared);
 
         if !self.zero {

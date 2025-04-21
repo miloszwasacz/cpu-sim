@@ -1,3 +1,4 @@
+use self::decode_queue::DecodeQueue;
 use self::front_end::FrontEnd;
 use self::load_queue::LoadQueue;
 use self::regs::future_file::FutureFile;
@@ -19,6 +20,7 @@ use ratatui::layout::Rect;
 use ratatui::prelude::*;
 use std::num::NonZeroUsize;
 
+mod decode_queue;
 mod front_end;
 mod load_queue;
 mod regs;
@@ -28,12 +30,14 @@ mod scrolling;
 
 const READY_COLOR: Color = Color::Green;
 const NOT_READY_COLOR: Color = Color::Red;
+const EXCEPTION_COLOR: Color = Color::Yellow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Focus)]
 enum Focused {
     #[none]
     None,
     FrontEnd,
+    DecodeQueue,
     Schedulers,
     LoadQueue,
     Rob,
@@ -43,6 +47,7 @@ enum Focused {
 
 pub struct CpuDashboard {
     front_end: FrontEnd,
+    decode_queue: DecodeQueue,
     schedulers: Schedulers,
     reg_file: RegFile,
     future_file: FutureFile,
@@ -55,6 +60,7 @@ impl CpuDashboard {
     pub fn new(scheduler_count: NonZeroUsize) -> Self {
         Self {
             front_end: Default::default(),
+            decode_queue: Default::default(),
             schedulers: Schedulers::new(scheduler_count),
             reg_file: Default::default(),
             future_file: Default::default(),
@@ -73,12 +79,19 @@ impl StatefulComponent for CpuDashboard {
             Layout::vertical([Constraint::Fill(1), RegFile::HEIGHT, FutureFile::HEIGHT])
                 .areas(area);
         let [left, rob] = Layout::horizontal([Constraint::Fill(1), Rob::WIDTH]).areas(top);
-        let [front_end, middle] =
-            Layout::vertical([FrontEnd::HEIGHT, Constraint::Fill(1)]).areas(left);
+        let [top, middle] = Layout::vertical([
+            Constraint::Length(FrontEnd::height(model.front_end())),
+            Constraint::Fill(1),
+        ])
+        .areas(left);
+        let [front_end, decode_queue] =
+            Layout::horizontal([FrontEnd::WIDTH, DecodeQueue::WIDTH]).areas(top);
         let [schedulers, load_queue] =
             Layout::horizontal([Schedulers::WIDTH, LoadQueue::WIDTH]).areas(middle);
 
         self.front_end.render(model.front_end(), front_end, buf);
+        self.decode_queue
+            .render(model.decode_queue(), decode_queue, buf);
         self.schedulers.render(model.schedulers(), schedulers, buf);
         self.reg_file.render(model.reg_file(), reg_file, buf);
         self.future_file
@@ -99,6 +112,7 @@ impl EventHandler<EventPayload<'_, '_, '_>> for CpuDashboard {
         let result = match self.focused {
             Focused::None => Default::default(),
             Focused::FrontEnd => self.front_end.handle_event(event.clone(), ()),
+            Focused::DecodeQueue => self.decode_queue.handle_event(event.clone(), ()),
             Focused::Schedulers => self.schedulers.handle_event(event.clone(), ()),
             Focused::RegFile => self.reg_file.handle_event(event.clone(), ()),
             Focused::FutureFile => self.future_file.handle_event(event.clone(), ()),
@@ -133,6 +147,7 @@ impl FocusHandler for CpuDashboard {
         match self.focused {
             Focused::None => None,
             Focused::FrontEnd => Some(&mut self.front_end as &mut dyn Focusable),
+            Focused::DecodeQueue => Some(&mut self.decode_queue as &mut dyn Focusable),
             Focused::Schedulers => Some(&mut self.schedulers as &mut dyn Focusable),
             Focused::RegFile => Some(&mut self.reg_file as &mut dyn Focusable),
             Focused::FutureFile => Some(&mut self.future_file as &mut dyn Focusable),

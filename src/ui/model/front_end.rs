@@ -1,24 +1,20 @@
-use cpu_sim::components::diagnostics::cpu::{Exception, IdIsRegs, IfIdRegs, Instruction};
+use cpu_sim::components::diagnostics::cpu::{Exception, RawInstr};
 use cpu_sim::components::memory::Address;
-use cpu_sim::instr::raw::RawInstr;
 
 pub type Fetched = Result<RawInstr, Exception>;
-pub type Decoded = Result<Instruction, Exception>;
 
 pub struct FrontEndModel {
     pc: Address,
-    fetched: Option<Fetched>,
-    decoded: Option<Decoded>,
+    fetched: Box<[Fetched]>,
+    decode_width: usize,
 }
 
 impl FrontEndModel {
-    pub(super) fn new(pc: Address, if_id_regs: Option<IfIdRegs>, id_is_regs: Option<IdIsRegs>) -> Self {
-        let fetched = if_id_regs.map(|regs| regs.instr);
-        let decoded = id_is_regs.map(|regs| regs.instr.map(|(_, i)| i));
+    pub(super) fn new(pc: Address, fetched: Box<[Fetched]>, decode_width: usize) -> Self {
         Self {
             pc,
             fetched,
-            decoded,
+            decode_width,
         }
     }
 
@@ -26,11 +22,11 @@ impl FrontEndModel {
         self.pc
     }
 
-    pub fn fetched(&self) -> Option<Fetched> {
-        self.fetched
+    pub fn fetched(&self) -> &[Fetched] {
+        &self.fetched
     }
 
-    pub fn decoded(&self) -> Option<Decoded> {
-        self.decoded
+    pub fn decode_width(&self) -> usize {
+        self.decode_width
     }
 }

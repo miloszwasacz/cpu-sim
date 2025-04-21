@@ -1,6 +1,7 @@
 pub mod components;
 pub mod instr;
 pub mod os;
+pub mod config;
 
 /// Includes a file generated during build.
 macro_rules! include_generated {

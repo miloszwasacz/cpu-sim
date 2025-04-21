@@ -2,6 +2,7 @@ use crate::components::cpu::reg::RegData;
 use crate::components::memory::Address;
 use crate::instr::Immediate;
 
+#[derive(Clone)]
 pub(in crate::components::cpu) struct Alu;
 
 impl Alu {

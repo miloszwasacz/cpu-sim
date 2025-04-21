@@ -24,6 +24,7 @@ impl PcAdder {
 
 //#region JumpAgu
 
+#[derive(Clone)]
 pub struct JumpAgu(Alu);
 
 impl JumpAgu {
