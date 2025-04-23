@@ -18,3 +18,13 @@ pub enum EventResult<T> {
     Handled(T),
     Err(SimError),
 }
+
+impl<T> EventResult<T> {
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> EventResult<U> {
+        match self {
+            EventResult::Ignored => EventResult::Ignored,
+            EventResult::Handled(r) => EventResult::Handled(f(r)),
+            EventResult::Err(err) => EventResult::Err(err),
+        }
+    }
+}

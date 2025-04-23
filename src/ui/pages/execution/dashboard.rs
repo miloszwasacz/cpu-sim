@@ -5,7 +5,7 @@ use self::regs::future_file::FutureFile;
 use self::regs::reg_file::RegFile;
 use self::rob::Rob;
 use self::schedulers::Schedulers;
-use super::EventPayload;
+use super::{EventPayload, HelpItem};
 use crate::ui::model::CpuModel;
 use crate::ui::{
     Component, EventHandler, EventResult, Focus, FocusHandler, Focusable, StatefulComponent,
@@ -54,6 +54,7 @@ pub struct CpuDashboard {
     rob: Rob,
     load_queue: LoadQueue,
     focused: Focused,
+    exit_code: Option<ExitCode>,
 }
 
 impl CpuDashboard {
@@ -67,7 +68,48 @@ impl CpuDashboard {
             rob: Default::default(),
             load_queue: Default::default(),
             focused: Default::default(),
+            exit_code: None,
         }
+    }
+
+    pub(super) fn help(&self) -> impl IntoIterator<Item = HelpItem> {
+        const SCROLL_V: (&str, &str) = ("↑↓", "Scroll");
+        const SCROLL_H: (&str, &str) = ("←→", "Scroll");
+        const JUMP: (&str, &str) = ("Home/End", "Scroll to start/end");
+        let mut tips = match self.exit_code {
+            None => vec![("F5", "Run"), ("Enter", "Step")],
+            Some(_) => vec![("Q", "Quit")],
+        };
+        match self.focused {
+            Focused::None => {}
+            Focused::FrontEnd => {}
+            Focused::DecodeQueue => {
+                tips.push(SCROLL_V);
+                tips.push(JUMP);
+            }
+            Focused::Schedulers => {
+                tips.push(SCROLL_V);
+                tips.push(JUMP);
+                tips.push(("←→", "Switch scheduler"));
+            }
+            Focused::LoadQueue => {
+                tips.push(SCROLL_V);
+                tips.push(JUMP);
+            }
+            Focused::Rob => {
+                tips.push(SCROLL_V);
+                tips.push(JUMP);
+            }
+            Focused::RegFile => {
+                tips.push(SCROLL_H);
+                tips.push(JUMP);
+            }
+            Focused::FutureFile => {
+                tips.push(SCROLL_H);
+                tips.push(JUMP);
+            }
+        }
+        tips
     }
 }
 
@@ -125,18 +167,24 @@ impl EventHandler<EventPayload<'_, '_, '_>> for CpuDashboard {
             EventResult::Ignored => match event {
                 Event::Key(event) if event.kind == KeyEventKind::Press => {
                     let result = match event.code {
-                        KeyCode::Enter => payload.cpu.step(),
-                        KeyCode::F(5) => payload.cpu.run(),
-                        _ => return EventResult::Ignored,
+                        KeyCode::Enter if self.exit_code.is_none() => payload.cpu.step(),
+                        KeyCode::F(5) if self.exit_code.is_none() => payload.cpu.run(),
+                        KeyCode::Char('q') if self.exit_code.is_some() => {
+                            return EventResult::Handled(self.exit_code);
+                        }
+                        _ => return Default::default(),
                     };
                     *payload.model = payload.cpu.diagnostics().into();
                     match result {
-                        Ok(CpuRun::Exit(code)) => EventResult::Handled(Some(code)),
+                        Ok(CpuRun::Exit(code)) => {
+                            self.exit_code = Some(code);
+                            EventResult::Handled(None)
+                        }
                         Ok(CpuRun::Break) => EventResult::Handled(None),
                         Err(err) => EventResult::Err(err.into()),
                     }
                 }
-                _ => EventResult::Ignored,
+                _ => Default::default(),
             },
         }
     }

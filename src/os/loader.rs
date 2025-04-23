@@ -24,11 +24,11 @@ impl Loader {
     ///
     /// [^1]: By _undefined behavior_ we mean the simulation might exhibit undefined behavior.
     ///       This method is still _safe_ in the [Rust sense](https://doc.rust-lang.org/reference/unsafety.html).
-    pub unsafe fn load<P: AsRef<Path>>(
+    pub unsafe fn load<P: AsRef<Path>, I, O, E>(
         &self,
         bin: P,
         mem: &mut Memory,
-        cpu: &mut Cpu,
+        cpu: &mut Cpu<I, O, E>,
     ) -> Result<(), LoaderError> {
         let bin = fs::read(bin)?;
 

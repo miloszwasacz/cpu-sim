@@ -18,7 +18,7 @@ pub mod diagnostics;
 
 pub(super) type PcPlus4 = Pc;
 
-impl Cpu<'_> {
+impl<I, O, E> Cpu<'_, I, O, E> {
     #[must_use]
     pub(super) fn fetch(&mut self) -> Pc {
         const ALIGN: Address = (IALIGN / BITS_IN_BYTE) as Address;

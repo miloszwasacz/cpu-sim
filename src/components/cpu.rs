@@ -14,6 +14,7 @@ use crate::instr::{EnvTrap, SyscallCode};
 use crate::os::Os;
 
 use std::error::Error;
+use std::io::{Read, Write};
 use std::mem;
 use std::num::NonZeroUsize;
 
@@ -50,7 +51,7 @@ struct CycleResult {
     jump_to_self: bool,
 }
 
-pub struct Cpu<'m> {
+pub struct Cpu<'m, I, O, E> {
     // Front End
     pc: StallingFlipFlop<Pc>,
     pc_adder: PcAdder,
@@ -74,12 +75,12 @@ pub struct Cpu<'m> {
 
     // Misc
     cycle_result: CycleResult,
-    os: Os,
+    os: Os<I, O, E>,
     exit: bool,
 }
 
-impl<'m> Cpu<'m> {
-    pub fn new(mem_bus: Bus<'m, Memory>) -> Self {
+impl<'m, I: Read, O: Write, E: Write> Cpu<'m, I, O, E> {
+    pub fn new(mem_bus: Bus<'m, Memory>, os: Os<I, O, E>) -> Self {
         //TODO Get schedulers & exec units from config
         let schedulers: Schedulers = [
             OperationType::ALU,
@@ -113,26 +114,9 @@ impl<'m> Cpu<'m> {
             data_mem: mem_bus,
 
             cycle_result: Default::default(),
-            os: Os::new(),
+            os,
             exit: false,
         }
-    }
-
-    pub fn scheduler_count(&self) -> usize {
-        self.schedulers.count()
-    }
-
-    pub(crate) fn os(&mut self) -> &mut Os {
-        &mut self.os
-    }
-
-    pub(crate) unsafe fn set_pc(&mut self, entrypoint: Address) {
-        self.pc = StallingFlipFlop::new(entrypoint);
-    }
-
-    pub fn reset(&mut self) {
-        self.pc.clear();
-        self.flush_pipeline();
     }
 
     pub fn run(&mut self) -> Result<CpuRun, Vec<Box<dyn Error>>> {
@@ -190,43 +174,6 @@ impl<'m> Cpu<'m> {
         } else {
             Ok(CpuRun::Break)
         }
-    }
-
-    fn clock_cycle(&mut self) -> CycleResult {
-        let new_pc = self.fetch();
-        let stall = self.decode();
-        self.issue();
-        self.execute();
-        self.write_result();
-        let mispredicted = self.commit();
-
-        // PC MUX
-        match mispredicted {
-            Some(jump) => {
-                self.pc.write(jump);
-                self.flush_pipeline();
-            }
-            None if stall => {
-                self.pc.stall();
-                self.if_id_regs.stall();
-            }
-            None => self.pc.write(new_pc),
-        }
-        self.finish_cycle();
-
-        mem::take(&mut self.cycle_result)
-    }
-
-    fn flush_pipeline(&mut self) {
-        //TODO Flush as early as possible (i.e. before commit)
-        //     and clear only entries after the mispredicted one
-        self.if_id_regs.clear();
-        self.decode_queue.clear();
-        self.rob.clear();
-        self.schedulers.clear();
-        self.regs.future_file_mut().clear();
-        self.cdb.clear();
-        self.load_queue.clear();
     }
 
     fn handle_syscall(&mut self) {
@@ -289,13 +236,69 @@ impl<'m> Cpu<'m> {
             }
         }
     }
+}
+
+impl<I, O, E> Cpu<'_, I, O, E> {
+    pub fn scheduler_count(&self) -> usize {
+        self.schedulers.count()
+    }
+
+    pub fn os(&mut self) -> &mut Os<I, O, E> {
+        &mut self.os
+    }
+
+    pub(crate) unsafe fn set_pc(&mut self, entrypoint: Address) {
+        self.pc = StallingFlipFlop::new(entrypoint);
+    }
+
+    pub fn reset(&mut self) {
+        self.pc.clear();
+        self.flush_pipeline();
+    }
+
+    fn clock_cycle(&mut self) -> CycleResult {
+        let new_pc = self.fetch();
+        let stall = self.decode();
+        self.issue();
+        self.execute();
+        self.write_result();
+        let mispredicted = self.commit();
+
+        // PC MUX
+        match mispredicted {
+            Some(jump) => {
+                self.pc.write(jump);
+                self.flush_pipeline();
+            }
+            None if stall => {
+                self.pc.stall();
+                self.if_id_regs.stall();
+            }
+            None => self.pc.write(new_pc),
+        }
+        self.finish_cycle();
+
+        mem::take(&mut self.cycle_result)
+    }
+
+    fn flush_pipeline(&mut self) {
+        //TODO Flush as early as possible (i.e. before commit)
+        //     and clear only entries after the mispredicted one
+        self.if_id_regs.clear();
+        self.decode_queue.clear();
+        self.rob.clear();
+        self.schedulers.clear();
+        self.regs.future_file_mut().clear();
+        self.cdb.clear();
+        self.load_queue.clear();
+    }
 
     fn get_exit_code(&self) -> ExitCode {
         self.regs.get(RegName::A0).i()
     }
 }
 
-impl Sequential for Cpu<'_> {
+impl<I, O, E> Sequential for Cpu<'_, I, O, E> {
     fn finish_cycle(&mut self) {
         self.pc.finish_cycle();
         self.if_id_regs.finish_cycle();

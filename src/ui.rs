@@ -2,17 +2,17 @@ use self::component::{Component, StatefulComponent};
 use self::error::SimError;
 use self::events::{EventHandler, EventResult};
 use self::focus::*;
+pub(crate) use self::model::streams::*;
 use self::pages::ExecutionPage;
 
-use cpu_sim::components::cpu::{Cpu, ExitCode};
+use cpu_sim::components::cpu::{Cpu as GenericCpu, ExitCode};
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use ratatui::crossterm::{event, execute};
 use ratatui::prelude::*;
-use std::io;
-use std::io::stdout;
+use std::io::{self, stdout};
 use std::panic::{set_hook, take_hook};
 
 mod component;
@@ -21,6 +21,8 @@ mod events;
 mod focus;
 mod model;
 mod pages;
+
+type Cpu<'m> = GenericCpu<'m, StdStream, StdStream, StdStream>;
 
 #[derive(Default)]
 enum Page<'c, 'm> {
@@ -104,8 +106,6 @@ impl<'c, 'm> App<'c, 'm> {
                     let render_result = self.render(tui).map_err(Into::into);
                     let code = result.and_then(|code| render_result.map(|_| code))?;
                     if let Some(code) = code {
-                        //TODO Handle finished program better
-                        std::thread::sleep(std::time::Duration::from_secs(2));
                         return Ok(code);
                     }
                 }

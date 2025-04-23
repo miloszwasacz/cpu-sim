@@ -2,7 +2,7 @@ pub use self::errno::Errno;
 use crate::components::memory::{Address, Memory, MemoryAccess};
 
 use std::fs::File;
-use std::io::{self, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
 
 mod errno;
 pub mod loader;
@@ -19,21 +19,45 @@ pub type Result = std::result::Result<OsFnResult, (OsFnResult, Errno)>;
 pub type OsFnResult = i32;
 pub type Fd = i32;
 
-pub struct Os {
+pub struct Os<I, O, E> {
     errno_addr: Option<Address>,
     _end_addr: Address,
     heap_end: Address,
+    stdin: I,
+    stdout: O,
+    stderr: E,
     file_table: Vec<Option<File>>,
 }
 
-impl Os {
-    pub(crate) fn new() -> Self {
+impl<I: Read, O: Write, E: Write> Os<I, O, E> {
+    pub fn new(stdin: I, stdout: O, stderr: E) -> Self {
         Self {
             errno_addr: None,
             _end_addr: 0,
             heap_end: 0,
+            stdin,
+            stdout,
+            stderr,
             file_table: vec![None, None, None],
         }
+    }
+}
+
+impl<I, O, E> Os<I, O, E> {
+    pub fn stdin(&self) -> &I {
+        &self.stdin
+    }
+
+    pub fn stdin_mut(&mut self) -> &mut I {
+        &mut self.stdin
+    }
+
+    pub fn stdout(&self) -> &O {
+        &self.stdout
+    }
+
+    pub fn stderr(&self) -> &E {
+        &self.stderr
     }
 
     fn set_errno_addr(&mut self, addr: Option<Address>) {
@@ -129,12 +153,14 @@ impl Os {
                 )
             })
     }
+}
 
+impl<I: Read, O, E> Os<I, O, E> {
     pub fn read(&mut self, mem: &mut Memory, file: Fd, buf: Address, count: u32) -> Result {
         assert_fd_valid!(file);
         let buf = &mut mem[buf..buf + count as Address];
         match file {
-            0 => io::stdin().read(buf),
+            0 => self.stdin.read(buf),
             1 | 2 => return Err((-1, errno::EBADF)),
             fd => self
                 .file_table
@@ -177,14 +203,16 @@ impl Os {
 
         Ok(prev_heap_end as _)
     }
+}
 
+impl<I, O: Write, E: Write> Os<I, O, E> {
     pub fn write(&mut self, mem: &Memory, file: Fd, buf: Address, count: u32) -> Result {
         assert_fd_valid!(file);
         let buf = &mem[buf..buf + count as Address];
         match file {
             0 => return Err((-1, errno::EBADF)),
-            1 => io::stdout().write(buf),
-            2 => io::stderr().write(buf),
+            1 => self.stdout.write(buf),
+            2 => self.stderr.write(buf),
             fd => self
                 .file_table
                 .get_mut(fd as usize)

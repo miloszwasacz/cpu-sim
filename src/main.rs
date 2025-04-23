@@ -1,9 +1,10 @@
 use self::ui::error::SimError;
-use self::ui::App;
+use self::ui::{App, StdStream};
 
 use cpu_sim::components::cpu::Cpu;
 use cpu_sim::components::memory::Memory;
 use cpu_sim::os::loader::Loader;
+use cpu_sim::os::Os;
 use std::cell::RefCell;
 use std::process::ExitCode;
 
@@ -13,8 +14,11 @@ fn main() -> ExitCode {
     const FILE: &str = "test/res/bin/bubble_sort";
 
     let mem = RefCell::new(Memory::new());
-    //TODO Provide stand-ins for stdin, stdout, and stderr to the CPU to not break the TUI
-    let mut cpu = Cpu::new(&mem);
+    let stdin = StdStream::default();
+    let stdout = StdStream::default();
+    let stderr = StdStream::default();
+    let os = Os::new(stdin, stdout, stderr);
+    let mut cpu = Cpu::new(&mem, os);
     if let Err(err) = unsafe { Loader.load(FILE, &mut mem.borrow_mut(), &mut cpu) } {
         eprintln!("Load error: {}", err);
         return ExitCode::FAILURE;
@@ -44,21 +48,22 @@ fn main() -> ExitCode {
 
     // loop {
     //     match cpu.run() {
-    //         Ok(CpuRun::Exit(exit_code)) => {
+    //         Ok(cpu_sim::components::cpu::CpuRun::Exit(exit_code)) => {
+    //             let stdout = cpu.os().stdout();
+    //             println!("{}", stdout.inner());
+    //
     //             eprintln!("process exited with code: {}", exit_code);
-    //             return Ok(());
-    //             // return ExitCode::SUCCESS;
+    //             return ExitCode::SUCCESS;
     //         }
-    //         Ok(CpuRun::Break) => {
+    //         Ok(cpu_sim::components::cpu::CpuRun::Break) => {
     //             eprintln!("process break");
     //             continue;
     //         }
     //         Err(errs) => {
-    //             return Err(errs.into());
-    //             // for err in errs {
-    //             //     eprintln!("{}", err);
-    //             // }
-    //             // return ExitCode::FAILURE;
+    //             for err in errs {
+    //                 eprintln!("{}", err);
+    //             }
+    //             return ExitCode::FAILURE;
     //         }
     //     }
     // }

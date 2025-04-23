@@ -49,7 +49,7 @@ impl Instruction {
 
 //#endregion
 
-impl Cpu<'_> {
+impl<I, O, E> Cpu<'_, I, O, E> {
     pub(super) fn issue(&mut self) {
         let mut decoded = self.decode_queue.pop();
         let mut rob_lock = self.rob.lock();
@@ -229,7 +229,7 @@ impl Cpu<'_> {
         load_queue.write(load1_results);
     }
 
-    pub fn write_result(&mut self) {
+    pub(super) fn write_result(&mut self) {
         let results = self.cdb.read();
         let future_file = self.regs.future_file_mut();
         self.rob.update_from_cdb(future_file, results);
@@ -238,7 +238,7 @@ impl Cpu<'_> {
 
     /// Returns then new PC if there was a branch misprediction.
     #[must_use]
-    pub fn commit(&mut self) -> Option<Address> {
+    pub(super) fn commit(&mut self) -> Option<Address> {
         let mem = &mut self.data_mem.borrow_mut();
         let mut result = Default::default();
 

@@ -15,6 +15,7 @@ mod load_queue;
 mod reg_file;
 mod rob;
 mod schedulers;
+pub mod streams;
 
 pub struct CpuModel {
     front_end: FrontEndModel,
