@@ -5,7 +5,7 @@ pub use self::decoder::Decoder;
 use super::error::FetchError;
 use super::reg::pipeline::IfIdRegs;
 use super::{Cpu, Pc, Stall};
-use crate::components::memory::{Address, MemoryAccess};
+use crate::components::memory::{Address, MemoryReadAccess};
 use crate::instr::full::FullInstruction;
 use crate::instr::raw::RawInstr;
 use crate::instr::{AluSrcA, Instruction};
@@ -18,7 +18,7 @@ pub mod diagnostics;
 
 pub(super) type PcPlus4 = Pc;
 
-impl<I, O, E> Cpu<'_, I, O, E> {
+impl<I, O, E> Cpu<I, O, E> {
     #[must_use]
     pub(super) fn fetch(&mut self) -> Pc {
         const ALIGN: Address = (IALIGN / BITS_IN_BYTE) as Address;
@@ -29,7 +29,8 @@ impl<I, O, E> Cpu<'_, I, O, E> {
             let pc_plus_4 = self.pc_adder.add(pc);
 
             let instr = if pc % ALIGN == 0 {
-                Ok(RawInstr::new(self.instr_mem.borrow().get(pc)))
+                let bits = self.mem_hierarchy.l1i().read(pc);
+                Ok(RawInstr::new(bits))
             } else {
                 Err(FetchError::MisalignedInstr(pc).into())
             };

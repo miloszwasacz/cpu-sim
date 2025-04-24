@@ -143,7 +143,7 @@ impl StatefulComponent for CpuDashboard {
     }
 }
 
-impl EventHandler<EventPayload<'_, '_, '_>> for CpuDashboard {
+impl EventHandler<EventPayload<'_, '_>> for CpuDashboard {
     type EventResult = Option<ExitCode>;
 
     fn handle_event(

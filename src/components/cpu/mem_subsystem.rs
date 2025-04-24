@@ -2,7 +2,7 @@ pub(super) use self::entry::LoadQueueEntry;
 use super::exec_engine::exec_unit::ExecResult;
 use super::exec_engine::ReorderBuffer;
 use super::flip_flop::{Clearable, Sequential};
-use crate::components::memory::Memory;
+use crate::components::memory::L1D;
 
 use itertools::Itertools;
 use std::collections::VecDeque;
@@ -34,7 +34,7 @@ impl LoadQueue {
         self.queue.capacity() - self.queue.len()
     }
 
-    pub fn execute(&mut self, rob: &ReorderBuffer, mem: &Memory) -> Option<ExecResult> {
+    pub fn execute(&mut self, rob: &ReorderBuffer, mem: &mut L1D) -> Option<ExecResult> {
         debug_assert!(!self.cleared);
         self.queue
             .iter()

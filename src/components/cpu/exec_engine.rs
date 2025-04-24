@@ -49,7 +49,7 @@ impl Instruction {
 
 //#endregion
 
-impl<I, O, E> Cpu<'_, I, O, E> {
+impl<I, O, E> Cpu<I, O, E> {
     pub(super) fn issue(&mut self) {
         let mut decoded = self.decode_queue.pop();
         let mut rob_lock = self.rob.lock();
@@ -197,7 +197,7 @@ impl<I, O, E> Cpu<'_, I, O, E> {
         let schedulers = self.schedulers.iter_mut();
         let exec_units = self.exec_units.iter_mut();
         let load_queue = &mut self.load_queue;
-        let mem = &self.data_mem.borrow();
+        let mem = self.mem_hierarchy.l1d();
 
         let mut available_loads = load_queue.free_spaces();
         let (results, load1_results) = schedulers
@@ -239,7 +239,7 @@ impl<I, O, E> Cpu<'_, I, O, E> {
     /// Returns then new PC if there was a branch misprediction.
     #[must_use]
     pub(super) fn commit(&mut self) -> Option<Address> {
-        let mem = &mut self.data_mem.borrow_mut();
+        let mem = self.mem_hierarchy.l1d();
         let mut result = Default::default();
 
         // Commit

@@ -1,8 +1,9 @@
 pub use self::errno::Errno;
-use crate::components::memory::{Address, Memory, MemoryAccess};
+use crate::components::memory::{Address, MemoryReadAccess, MemoryWriteAccess};
 
 use std::fs::File;
 use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
+use std::ops::Range;
 
 mod errno;
 pub mod loader;
@@ -69,9 +70,9 @@ impl<I, O, E> Os<I, O, E> {
         self._end_addr = addr;
     }
 
-    pub fn set_errno(&mut self, mem: &mut Memory, errno: Errno) {
+    pub fn set_errno(&mut self, mut mem: impl MemoryWriteAccess, errno: Errno) {
         if let Some(addr) = self.errno_addr {
-            mem.set(addr, errno);
+            mem.write(addr, errno);
         }
     }
 
@@ -100,7 +101,10 @@ impl<I, O, E> Os<I, O, E> {
             })
     }
 
-    pub fn fstat(&mut self, mem: &mut Memory, file: Fd, statbuf: Address) -> Result {
+    pub fn fstat<M>(&mut self, mut mem: M, file: Fd, statbuf: Address) -> Result
+    where
+        M: MemoryReadAccess + MemoryWriteAccess,
+    {
         assert_fd_valid!(file);
         let is_open = |file| {
             self.file_table
@@ -110,11 +114,13 @@ impl<I, O, E> Os<I, O, E> {
         };
 
         if file <= 2 || is_open(file) {
-            let bytes = &mut mem[statbuf..statbuf + size_of::<libc::stat>() as Address];
+            let addr_range = statbuf..statbuf + size_of::<libc::stat>() as Address;
+            let mut bytes = read_bytes(&mut mem, addr_range.clone());
             let ptr = bytes.as_mut_ptr() as *mut libc::stat;
             let mut st = unsafe { std::ptr::read(ptr) };
             st.st_mode = libc::S_IFCHR as _;
             unsafe { std::ptr::write(ptr, st) };
+            write_bytes(mem, addr_range, &bytes);
 
             Ok(0)
         } else {
@@ -156,20 +162,27 @@ impl<I, O, E> Os<I, O, E> {
 }
 
 impl<I: Read, O, E> Os<I, O, E> {
-    pub fn read(&mut self, mem: &mut Memory, file: Fd, buf: Address, count: u32) -> Result {
+    pub fn read<M>(&mut self, mut mem: M, file: Fd, buf: Address, count: u32) -> Result
+    where
+        M: MemoryReadAccess + MemoryWriteAccess,
+    {
         assert_fd_valid!(file);
-        let buf = &mut mem[buf..buf + count as Address];
+        let addr_range = buf..buf + count as Address;
+        let mut buf = read_bytes(&mut mem, addr_range.clone());
         match file {
-            0 => self.stdin.read(buf),
+            0 => self.stdin.read(&mut buf),
             1 | 2 => return Err((-1, errno::EBADF)),
             fd => self
                 .file_table
                 .get_mut(fd as usize)
                 .and_then(Option::as_mut)
                 .ok_or((-1, errno::EBADF))?
-                .read(buf),
+                .read(&mut buf),
         }
-        .map(|byte_count| byte_count as _)
+        .map(|byte_count| {
+            write_bytes(mem, addr_range, &buf);
+            byte_count as _
+        })
         .map_err(|err| {
             (
                 -1,
@@ -206,19 +219,23 @@ impl<I: Read, O, E> Os<I, O, E> {
 }
 
 impl<I, O: Write, E: Write> Os<I, O, E> {
-    pub fn write(&mut self, mem: &Memory, file: Fd, buf: Address, count: u32) -> Result {
+    pub fn write<M>(&mut self, mut mem: M, file: Fd, buf: Address, count: u32) -> Result
+    where
+        M: MemoryReadAccess,
+    {
         assert_fd_valid!(file);
-        let buf = &mem[buf..buf + count as Address];
+        let addr_range = buf..buf + count as Address;
+        let buf = read_bytes(&mut mem, addr_range.clone());
         match file {
             0 => return Err((-1, errno::EBADF)),
-            1 => self.stdout.write(buf),
-            2 => self.stderr.write(buf),
+            1 => self.stdout.write(&buf),
+            2 => self.stderr.write(&buf),
             fd => self
                 .file_table
                 .get_mut(fd as usize)
                 .and_then(Option::as_mut)
                 .ok_or((-1, errno::EBADF))?
-                .write(buf),
+                .write(&buf),
         }
         .map(|byte_count| byte_count as _)
         .map_err(|err| {
@@ -238,5 +255,19 @@ impl<I, O: Write, E: Write> Os<I, O, E> {
                 },
             )
         })
+    }
+}
+
+fn read_bytes<M: MemoryReadAccess>(mut mem: M, addr_range: Range<Address>) -> Vec<u8> {
+    let mut bytes = Vec::<u8>::with_capacity(addr_range.len());
+    for addr in addr_range {
+        bytes.push(mem.read(addr))
+    }
+    bytes
+}
+
+fn write_bytes<M: MemoryWriteAccess>(mut mem: M, addr_range: Range<Address>, data: &[u8]) {
+    for (addr, byte) in addr_range.zip(data) {
+        mem.write(addr, *byte);
     }
 }

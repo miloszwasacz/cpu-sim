@@ -1,9 +1,13 @@
-pub use self::size::MemSize;
 pub(super) use self::convert::ByteConvertible;
+pub use self::hierarchy::{MemHierarchy, L1D, L1I};
+pub use self::size::MemSize;
+pub use self::cache::{MemoryWriteAccess, MemoryReadAccess};
 
 use std::ops::{Index, IndexMut, Range};
 
+mod cache;
 mod convert;
+mod hierarchy;
 mod size;
 
 pub type Address = u32;
@@ -53,27 +57,4 @@ impl IndexMut<Range<Address>> for Memory {
         let index = index.start as usize..index.end as usize;
         self.0.index_mut(index)
     }
-}
-
-pub trait MemoryAccess<T: ByteConvertible> {
-    fn get(&self, address: Address) -> T;
-    fn set(&mut self, address: Address, data: T);
-}
-
-impl<T: ByteConvertible> MemoryAccess<T> for Memory {
-    fn get(&self, address: Address) -> T {
-        let bytes = &self.0[addr_range::<T>(address)];
-        T::from_le_bytes(bytes.try_into().unwrap())
-    }
-
-    fn set(&mut self, address: Address, data: T) {
-        let bytes = data.to_le_bytes();
-        self.0[addr_range::<T>(address)].copy_from_slice(bytes.as_ref());
-    }
-}
-
-/// Returns a range that starts at `addr` and has length [`size_of::<T>()`](size_of)
-fn addr_range<T>(addr: Address) -> Range<usize> {
-    let addr = addr as usize;
-    addr..(addr + size_of::<T>())
 }

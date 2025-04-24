@@ -22,22 +22,22 @@ mod focus;
 mod model;
 mod pages;
 
-type Cpu<'m> = GenericCpu<'m, StdStream, StdStream, StdStream>;
+type Cpu = GenericCpu<StdStream, StdStream, StdStream>;
 
 #[derive(Default)]
-enum Page<'c, 'm> {
+enum Page<'c> {
     #[default]
     None,
-    ExecPage(ExecutionPage<'c, 'm>),
+    ExecPage(ExecutionPage<'c>),
 }
 
-pub struct App<'c, 'm> {
-    cpu: Option<&'c mut Cpu<'m>>,
-    page: Page<'c, 'm>,
+pub struct App<'c> {
+    cpu: Option<&'c mut Cpu>,
+    page: Page<'c>,
 }
 
-impl<'c, 'm> App<'c, 'm> {
-    pub fn new(cpu: &'c mut Cpu<'m>) -> Self {
+impl<'c> App<'c> {
+    pub fn new(cpu: &'c mut Cpu) -> Self {
         Self {
             cpu: Some(cpu),
             page: Default::default(),

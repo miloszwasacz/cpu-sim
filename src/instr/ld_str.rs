@@ -1,5 +1,5 @@
 use crate::components::cpu::reg::{DataType, RegData};
-use crate::components::memory::{Address, Memory, MemoryAccess};
+use crate::components::memory::{Address, MemoryReadAccess, MemoryWriteAccess, L1D};
 use crate::instr::decode::encoding::{ITypeFormat, STypeFormat};
 use crate::instr::decode::Decode;
 use crate::instr::raw::RawInstr;
@@ -47,8 +47,8 @@ impl<T> Decode for Load<T> {
 
 impl<T: DataType> From<Load<T>> for Instruction {
     fn from(value: Load<T>) -> Self {
-        let load = |mem: &Memory, addr: Address| {
-            let data: T = MemoryAccess::get(mem, addr);
+        let load = |mem: &mut L1D, addr: Address| {
+            let data: T = MemoryReadAccess::read(mem, addr);
             data.into()
         };
 
@@ -82,11 +82,11 @@ impl<T> Decode for Store<T> {
     }
 }
 
-impl<T: DataType> From<Store<T>> for Instruction {
+impl<T: DataType + Clone> From<Store<T>> for Instruction {
     fn from(value: Store<T>) -> Self {
-        let store = |mem: &mut Memory, addr: Address, data: RegData| {
+        let store = |mem: &mut L1D, addr: Address, data: RegData| {
             let data: T = data.into();
-            MemoryAccess::set(mem, addr, data);
+            mem.write(addr, data);
         };
 
         Instruction::Store {

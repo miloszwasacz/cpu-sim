@@ -24,7 +24,7 @@ pub struct CpuSnapshot {
     pub load_queue: LoadQueueSnapshot,
 }
 
-impl<I, O, E> Diagnostics for Cpu<'_, I, O, E> {
+impl<I, O, E> Diagnostics for Cpu<I, O, E> {
     type Output = CpuSnapshot;
 
     fn diagnostics(&self) -> Self::Output {

@@ -1,6 +1,6 @@
 use crate::components::cpu::exec_engine::exec_unit::ExecResult;
 use crate::components::cpu::exec_engine::{RobIndex, StoreMeta};
-use crate::components::memory::{Address, Memory};
+use crate::components::memory::{Address, L1D};
 use crate::instr::mem_access::MemRead;
 
 #[derive(Debug, Clone, Copy)]
@@ -40,7 +40,7 @@ impl LoadQueueEntry {
         load_start < store_end && store_start < load_end
     }
 
-    pub(super) fn execute(self, mem: &Memory) -> ExecResult {
+    pub(super) fn execute(self, mem: &mut L1D) -> ExecResult {
         let load = self.load;
         let data = load(mem, self.addr);
 

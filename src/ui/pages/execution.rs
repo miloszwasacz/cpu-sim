@@ -48,8 +48,8 @@ impl Tab {
 
 type HelpItem<'a, 'b> = (&'a str, &'b str);
 
-pub struct ExecutionPage<'c, 'm> {
-    cpu: &'c mut Cpu<'m>,
+pub struct ExecutionPage<'c> {
+    cpu: &'c mut Cpu,
     model: CpuModel,
     tabs: ExecutionTabs,
     dashboard: CpuDashboard,
@@ -58,8 +58,8 @@ pub struct ExecutionPage<'c, 'm> {
     tab: Tab,
 }
 
-impl<'c, 'm> ExecutionPage<'c, 'm> {
-    pub fn new(cpu: &'c mut Cpu<'m>) -> Self {
+impl<'c> ExecutionPage<'c> {
+    pub fn new(cpu: &'c mut Cpu) -> Self {
         let model = cpu.diagnostics().into();
         let scheduler_count =
             NonZeroUsize::new(cpu.scheduler_count()).expect("the should be at least one scheduler");
@@ -113,13 +113,13 @@ impl<'c, 'm> ExecutionPage<'c, 'm> {
     }
 }
 
-impl<'c, 'm> Page<&'c mut Cpu<'m>> for ExecutionPage<'c, 'm> {
-    fn close(self) -> &'c mut Cpu<'m> {
+impl<'c> Page<&'c mut Cpu> for ExecutionPage<'c> {
+    fn close(self) -> &'c mut Cpu {
         self.cpu
     }
 }
 
-impl Widget for &mut ExecutionPage<'_, '_> {
+impl Widget for &mut ExecutionPage<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let [tabs, content, help] = Layout::vertical([
             Constraint::Length(2),
@@ -155,7 +155,7 @@ impl Widget for &mut ExecutionPage<'_, '_> {
     }
 }
 
-impl EventHandler<()> for ExecutionPage<'_, '_> {
+impl EventHandler<()> for ExecutionPage<'_> {
     type EventResult = Option<ExitCode>;
 
     fn handle_event(&mut self, event: Event, _: ()) -> EventResult<Self::EventResult> {
@@ -181,12 +181,12 @@ impl EventHandler<()> for ExecutionPage<'_, '_> {
     }
 }
 
-pub struct EventPayload<'c, 'm, 'cm> {
-    cpu: &'c mut Cpu<'m>,
-    model: &'cm mut CpuModel,
+pub struct EventPayload<'c, 'm> {
+    cpu: &'c mut Cpu,
+    model: &'m mut CpuModel,
 }
 
-impl FocusHandler for ExecutionPage<'_, '_> {
+impl FocusHandler for ExecutionPage<'_> {
     fn focused(&mut self) -> Option<&mut dyn Focusable> {
         Some(match self.focused {
             Focused::Content => match self.tab {

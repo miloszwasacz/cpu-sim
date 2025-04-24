@@ -7,8 +7,7 @@ use self::front_end::{DecodeQueue, Decoder, JumpAgu, PcAdder};
 use self::mem_subsystem::LoadQueue;
 use self::reg::pipeline::IfIdRegs;
 use self::reg::{RegFile, RegName};
-use super::memory::{Address, Memory};
-use super::Bus;
+use super::memory::{Address, MemHierarchy, Memory};
 use crate::config::Immutable;
 use crate::instr::{EnvTrap, SyscallCode};
 use crate::os::Os;
@@ -17,6 +16,7 @@ use std::error::Error;
 use std::io::{Read, Write};
 use std::mem;
 use std::num::NonZeroUsize;
+use std::sync::{Arc, Mutex};
 
 pub(super) mod diagnostics;
 pub mod error;
@@ -51,11 +51,10 @@ struct CycleResult {
     jump_to_self: bool,
 }
 
-pub struct Cpu<'m, I, O, E> {
+pub struct Cpu<I, O, E> {
     // Front End
     pc: StallingFlipFlop<Pc>,
     pc_adder: PcAdder,
-    instr_mem: Bus<'m, Memory>,
     if_id_regs: StallingFlipFlop<Box<[IfIdRegs]>>,
     decoders: Box<[Decoder]>,
     jump_agus: Box<[JumpAgu]>,
@@ -71,7 +70,7 @@ pub struct Cpu<'m, I, O, E> {
 
     // Memory Subsystem
     load_queue: LoadQueue,
-    data_mem: Bus<'m, Memory>,
+    mem_hierarchy: MemHierarchy,
 
     // Misc
     cycle_result: CycleResult,
@@ -79,8 +78,8 @@ pub struct Cpu<'m, I, O, E> {
     exit: bool,
 }
 
-impl<'m, I: Read, O: Write, E: Write> Cpu<'m, I, O, E> {
-    pub fn new(mem_bus: Bus<'m, Memory>, os: Os<I, O, E>) -> Self {
+impl<I: Read, O: Write, E: Write> Cpu<I, O, E> {
+    pub fn new(mem: Arc<Mutex<Memory>>, os: Os<I, O, E>) -> Self {
         //TODO Get schedulers & exec units from config
         let schedulers: Schedulers = [
             OperationType::ALU,
@@ -93,11 +92,11 @@ impl<'m, I: Read, O: Write, E: Write> Cpu<'m, I, O, E> {
         .map(|op| Scheduler::new(op, SCHEDULER_CAPACITY))
         .collect();
         let exec_units = Vec::from(&schedulers).into_boxed_slice();
+        let mem_hierarchy = MemHierarchy::new(mem);
 
         Self {
             pc: StallingFlipFlop::new(Pc::default()),
             pc_adder: PcAdder::new(),
-            instr_mem: mem_bus,
             if_id_regs: StallingFlipFlop::new(vec![].into_boxed_slice()),
             decoders: vec![Decoder::new(); DECODE_WIDTH.get()].into_boxed_slice(),
             jump_agus: vec![JumpAgu::new(); DECODE_WIDTH.get()].into_boxed_slice(),
@@ -111,7 +110,7 @@ impl<'m, I: Read, O: Write, E: Write> Cpu<'m, I, O, E> {
             cdb: CommonDataBus::new(),
 
             load_queue: LoadQueue::with_capacity(LOAD_QUEUE_CAPACITY),
-            data_mem: mem_bus,
+            mem_hierarchy,
 
             cycle_result: Default::default(),
             os,
@@ -182,7 +181,7 @@ impl<'m, I: Read, O: Write, E: Write> Cpu<'m, I, O, E> {
                 crate::components::cpu::reg::RegData::signed(match $os.$( $call )+ {
                     Ok(r) => r,
                     Err((r, errno)) => {
-                        $os.set_errno($mem, errno);
+                        $os.set_errno(&mut $mem, errno);
                         r
                     }
                 })
@@ -191,7 +190,7 @@ impl<'m, I: Read, O: Write, E: Write> Cpu<'m, I, O, E> {
 
         let os = &mut self.os;
         let reg_file = &mut self.regs;
-        let mem = &mut self.data_mem.borrow_mut();
+        let mut mem = self.mem_hierarchy.l1d();
         // TODO Log unknown syscalls instead of panicking
         let syscall = SyscallCode::try_from(reg_file.get(RegName::A7)).unwrap();
         match syscall {
@@ -204,7 +203,7 @@ impl<'m, I: Read, O: Write, E: Write> Cpu<'m, I, O, E> {
             SyscallCode::Fstat => {
                 let fd = reg_file.get(RegName::A0).i();
                 let statbuf = reg_file.get(RegName::A1).addr();
-                let result = os_call!(os, mem, |os| os.fstat(mem, fd, statbuf));
+                let result = os_call!(os, mem, |os| os.fstat(&mut mem, fd, statbuf));
                 reg_file.set(RegName::A0, result);
             }
             SyscallCode::Lseek => {
@@ -218,7 +217,7 @@ impl<'m, I: Read, O: Write, E: Write> Cpu<'m, I, O, E> {
                 let fd = reg_file.get(RegName::A0).i();
                 let buf = reg_file.get(RegName::A1).addr();
                 let count = reg_file.get(RegName::A2).u();
-                let result = os_call!(os, mem, |os| os.read(mem, fd, buf, count));
+                let result = os_call!(os, mem, |os| os.read(&mut mem, fd, buf, count));
                 reg_file.set(RegName::A0, result);
             }
             SyscallCode::Sbrk => {
@@ -231,14 +230,14 @@ impl<'m, I: Read, O: Write, E: Write> Cpu<'m, I, O, E> {
                 let fd = reg_file.get(RegName::A0).i();
                 let buf = reg_file.get(RegName::A1).addr();
                 let count = reg_file.get(RegName::A2).u();
-                let result = os_call!(os, mem, |os| os.write(mem, fd, buf, count));
+                let result = os_call!(os, mem, |os| os.write(&mut mem, fd, buf, count));
                 reg_file.set(RegName::A0, result);
             }
         }
     }
 }
 
-impl<I, O, E> Cpu<'_, I, O, E> {
+impl<I, O, E> Cpu<I, O, E> {
     pub fn scheduler_count(&self) -> usize {
         self.schedulers.count()
     }
@@ -298,7 +297,7 @@ impl<I, O, E> Cpu<'_, I, O, E> {
     }
 }
 
-impl<I, O, E> Sequential for Cpu<'_, I, O, E> {
+impl<I, O, E> Sequential for Cpu<I, O, E> {
     fn finish_cycle(&mut self) {
         self.pc.finish_cycle();
         self.if_id_regs.finish_cycle();

@@ -5,21 +5,21 @@ use cpu_sim::components::cpu::Cpu;
 use cpu_sim::components::memory::Memory;
 use cpu_sim::os::loader::Loader;
 use cpu_sim::os::Os;
-use std::cell::RefCell;
 use std::process::ExitCode;
+use std::sync::{Arc, Mutex};
 
 mod ui;
 
 fn main() -> ExitCode {
     const FILE: &str = "test/res/bin/bubble_sort";
 
-    let mem = RefCell::new(Memory::new());
+    let mem = Arc::new(Mutex::new(Memory::new()));
     let stdin = StdStream::default();
     let stdout = StdStream::default();
     let stderr = StdStream::default();
     let os = Os::new(stdin, stdout, stderr);
-    let mut cpu = Cpu::new(&mem, os);
-    if let Err(err) = unsafe { Loader.load(FILE, &mut mem.borrow_mut(), &mut cpu) } {
+    let mut cpu = Cpu::new(mem.clone(), os);
+    if let Err(err) = unsafe { Loader.load(FILE, &mut mem.lock().unwrap(), &mut cpu) } {
         eprintln!("Load error: {}", err);
         return ExitCode::FAILURE;
     }
