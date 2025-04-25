@@ -3,7 +3,7 @@ pub use super::exec_engine::diagnostics::*;
 pub use super::front_end::diagnostics::*;
 pub use super::mem_subsystem::diagnostics::*;
 pub use super::reg::diagnostics::*;
-pub use super::reg::pipeline::{IdIsRegs, IfIdRegs};
+pub use super::reg::pipeline::{BpRegs, IfRegs, ZbpRegs, Prediction};
 pub use super::AluControl;
 pub use crate::instr::full::FullInstruction as Instruction;
 pub use crate::instr::raw::RawInstr;
@@ -14,7 +14,11 @@ use crate::components::diagnostics::Diagnostics;
 
 pub struct CpuSnapshot {
     pub pc: Pc,
-    pub if_id_regs: Box<[Result<RawInstr, Exception>]>,
+    pub zb_predictor: ZbPredictorSnapshot,
+    pub zbp_regs: Box<[ZbpRegs]>,
+    pub if_regs: Box<[IfRegs]>,
+    pub branch_predictor: BranchPredictorSnapshot,
+    pub bp_regs: Box<[BpRegs]>,
     pub decode_width: usize,
     pub decode_queue: DecodeQueueSnapshot,
     pub rob: RobSnapshot,
@@ -30,7 +34,11 @@ impl<I, O, E> Diagnostics for Cpu<I, O, E> {
     fn diagnostics(&self) -> Self::Output {
         Self::Output {
             pc: *self.pc.read(),
-            if_id_regs: self.if_id_regs.read().iter().map(|reg| reg.instr).collect(),
+            zb_predictor: self.zb_predictor.diagnostics(),
+            zbp_regs: self.zbp_regs.read().clone(),
+            if_regs: self.if_regs.read().clone(),
+            branch_predictor: self.branch_predictor.diagnostics(),
+            bp_regs: self.bp_regs.read().clone(),
             decode_width: self.decoders.len(),
             decode_queue: self.decode_queue.diagnostics(),
             rob: self.rob.diagnostics(),

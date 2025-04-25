@@ -45,9 +45,9 @@ impl RsEntry<NotReady> {
         results: &[ExecResult],
     ) -> Result<RsEntry<Ready>, RsEntry<NotReady>> {
         let results = results.iter().copied().filter_map(|r| match r.result {
-            Ok(ExecResultData::Alu(value)) | Ok(ExecResultData::Load2(value)) => {
-                Some((r.tag, value))
-            }
+            Ok(ExecResultData::Alu(value))
+            | Ok(ExecResultData::JumpLink(value))
+            | Ok(ExecResultData::Load2(value)) => Some((r.tag, value)),
             _ => None,
         });
         //TODO If entry A is waiting for result B, but result B produces an exception,
@@ -258,14 +258,12 @@ impl RegValue {
             let entry = rob.get_if_ready(*index).and_then(|entry| entry.data().ok());
             if let Some(entry) = entry {
                 match entry {
-                    ReadyRobEntry::Alu { value, .. }
-                    | ReadyRobEntry::Load { value, .. }
-                    | ReadyRobEntry::Jump {
-                        link_data: value, ..
-                    } => {
+                    ReadyRobEntry::Alu { value, .. } | ReadyRobEntry::Load { value, .. } => {
                         *self = RegValue::Value(value);
                     }
-                    ReadyRobEntry::Branch { .. } | ReadyRobEntry::Store { .. } => {}
+                    ReadyRobEntry::Jump { .. }
+                    | ReadyRobEntry::Branch { .. }
+                    | ReadyRobEntry::Store { .. } => {}
                 }
             }
         }

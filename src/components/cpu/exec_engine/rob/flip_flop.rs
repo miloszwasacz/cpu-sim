@@ -1,5 +1,7 @@
 use crate::components::cpu::flip_flop::{Clearable, Sequential};
 
+//#region RobLenFlipFlop
+
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct RobLenFlipFlop {
     value: usize,
@@ -49,3 +51,54 @@ impl Clearable for RobLenFlipFlop {
         self.cleared = true;
     }
 }
+
+//#endregion
+
+//#region RobTrapFlipFlop
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct RobTrapFlipFlop {
+    value: bool,
+    pushed: bool,
+    popped: bool,
+    cleared: bool,
+}
+
+impl RobTrapFlipFlop {
+    #[inline]
+    pub fn read(&self) -> bool {
+        self.value
+    }
+
+    pub fn push(&mut self) {
+        debug_assert!(!self.pushed && !self.cleared);
+        self.pushed = true;
+    }
+
+    pub fn pop(&mut self) {
+        debug_assert!(!self.popped && !self.cleared);
+        self.popped = true;
+    }
+}
+
+impl Sequential for RobTrapFlipFlop {
+    fn finish_cycle(&mut self) {
+        let value = if self.cleared {
+            Default::default()
+        } else {
+            (!self.popped && self.value) || self.pushed
+        };
+        *self = Self {
+            value,
+            ..Default::default()
+        }
+    }
+}
+
+impl Clearable for RobTrapFlipFlop {
+    fn clear(&mut self) {
+        self.cleared = true;
+    }
+}
+
+//#endregion

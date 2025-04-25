@@ -14,8 +14,11 @@ macro_rules! system_instr {
         pub struct $name(());
 
         impl crate::instr::decode::Decode for $name {
-            fn decode(raw: crate::instr::raw::RawInstr) -> Self {
-                debug_assert_eq!(raw.encoding(), Self::ENCODING);
+            fn decode(_raw: crate::instr::raw::RawInstr) -> Self {
+                #[cfg(debug_assertions)]
+                {
+                    assert_eq!(_raw.encoding(), Self::ENCODING);   
+                }
                 Self(())
             }
         }

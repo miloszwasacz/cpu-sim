@@ -84,7 +84,7 @@ impl<I, O, E> Cpu<I, O, E> {
             let pc_plus_4 = RegData::address(pc_plus_4);
 
             let rob_index = rob_entry_lock.index();
-            let (rob_entry, rs_entry_data, dest, jump) = match instr {
+            let (rob_entry, rs_entry_data, dest) = match instr {
                 Instruction::Alu {
                     ctrl,
                     src1,
@@ -98,7 +98,7 @@ impl<I, O, E> Cpu<I, O, E> {
 
                     let rob_entry = RobEntry::alu(pc, dest);
                     let rs_entry_data = rs::NotReady::alu(ctrl, src1, src2, &future_file_lock);
-                    (rob_entry, rs_entry_data, Some(dest), false)
+                    (rob_entry, rs_entry_data, Some(dest))
                 }
                 Instruction::Jump {
                     base: AluSrcA::Reg(base),
@@ -106,34 +106,25 @@ impl<I, O, E> Cpu<I, O, E> {
                     apply_mask,
                     link_reg,
                 } => {
-                    let predicted = predicted.expect("non-pc-based jumps should be predicted");
                     let rob_entry =
                         RobEntry::<rob::NotReady>::jump(pc, predicted, link_reg, pc_plus_4);
                     let rs_entry_data =
                         rs::NotReady::jump(base, offset, apply_mask, &future_file_lock);
-                    (rob_entry, rs_entry_data, Some(link_reg), true)
+                    (rob_entry, rs_entry_data, Some(link_reg))
                 }
                 Instruction::Jump { link_reg, .. } => {
                     // PC-based jumps require no execution, and therefore no reservation stations
                     #[allow(clippy::drop_non_drop)]
                     drop(rs_lock);
 
-                    let target = predicted.expect("pc-based jumps should have pre-computed target");
-                    let rob_entry = RobEntry::<rob::Ready>::jump(pc, link_reg, pc_plus_4, target);
+                    debug_assert_eq!(predicted, target);
+                    let rob_entry =
+                        RobEntry::<rob::Ready>::jump(pc, predicted, link_reg, pc_plus_4, target);
 
                     rob_entry_lock.issue_ready(rob_entry);
                     future_file_lock.issue_new(link_reg, rob_index, priority);
-
-                    break;
-                }
-                Instruction::EnvTrap(trap) => {
-                    // Trap instructions require no execution, and therefore no reservation stations
-                    #[allow(clippy::drop_non_drop)]
-                    drop(rs_lock);
-
-                    let rob_entry = RobEntry::<rob::Ready>::env_trap(pc, trap);
-                    rob_entry_lock.issue_ready(rob_entry);
-                    break;
+                    self.cdb.write_jump_link(rob_index, pc_plus_4);
+                    continue;
                 }
                 Instruction::Branch {
                     ctrl,
@@ -141,11 +132,10 @@ impl<I, O, E> Cpu<I, O, E> {
                     src2,
                     offset: _,
                 } => {
-                    let predicted = predicted.expect("branches should be predicted");
-                    let target = target.expect("branches should have pre-computed target");
-                    let rob_entry = RobEntry::branch(pc, predicted == target, target);
+                    let rob_entry =
+                        RobEntry::branch(pc, pc_plus_4.addr(), predicted == target, target);
                     let rs_entry_data = rs::NotReady::branch(ctrl, src1, src2, &future_file_lock);
-                    (rob_entry, rs_entry_data, None, true)
+                    (rob_entry, rs_entry_data, None)
                 }
                 Instruction::Load {
                     load,
@@ -157,7 +147,7 @@ impl<I, O, E> Cpu<I, O, E> {
                     let rob_entry = RobEntry::load(pc, dest);
                     let rs_entry_data =
                         rs::NotReady::load(load, byte_count, base, offset, &future_file_lock);
-                    (rob_entry, rs_entry_data, Some(dest), false)
+                    (rob_entry, rs_entry_data, Some(dest))
                 }
                 Instruction::Store {
                     store,
@@ -168,7 +158,16 @@ impl<I, O, E> Cpu<I, O, E> {
                 } => {
                     let rob_entry = RobEntry::store(pc, store, byte_count, src);
                     let rs_entry_data = rs::NotReady::store(base, offset, &future_file_lock);
-                    (rob_entry, rs_entry_data, None, false)
+                    (rob_entry, rs_entry_data, None)
+                }
+                Instruction::EnvTrap(trap) => {
+                    // Trap instructions require no execution, and therefore no reservation stations
+                    #[allow(clippy::drop_non_drop)]
+                    drop(rs_lock);
+
+                    let rob_entry = RobEntry::<rob::Ready>::env_trap(pc, trap);
+                    rob_entry_lock.issue_ready(rob_entry);
+                    break;
                 }
             };
             let rs_entry = RsEntry {
@@ -184,10 +183,6 @@ impl<I, O, E> Cpu<I, O, E> {
             }
             if let Some(dest) = dest {
                 future_file_lock.issue_new(dest, rob_index, priority);
-            }
-
-            if jump {
-                break;
             }
         }
     }
@@ -243,10 +238,7 @@ impl<I, O, E> Cpu<I, O, E> {
         let mut result = Default::default();
 
         // Commit
-        let entry = match self.rob.pop_if_ready() {
-            Some(entry) => entry,
-            None => return result,
-        };
+        let entry = self.rob.pop_if_ready()?;
         let data = match *entry.data() {
             Ok(data) => data,
             Err(trap) => {
@@ -255,6 +247,7 @@ impl<I, O, E> Cpu<I, O, E> {
             }
         };
 
+        let pc = entry.addr();
         match data {
             ReadyRobEntry::Alu { dest, value } | ReadyRobEntry::Load { dest, value } => {
                 self.regs.set(dest, value);
@@ -266,19 +259,26 @@ impl<I, O, E> Cpu<I, O, E> {
                 target,
             } => {
                 self.regs.set(link_reg, link_data);
-                if predicted != target {
+                let correct = predicted == target;
+                if !correct {
                     result = Some(target);
-                }
-                self.cycle_result.jump_to_self = entry.addr() == target;
+                };
+                self.zb_predictor.update(pc, target, correct);
+                self.branch_predictor.update(pc, true);
+                self.cycle_result.jump_to_self = pc == target;
             }
             ReadyRobEntry::Branch {
                 predicted,
                 target,
                 taken,
+                pc_plus_4,
             } => {
-                if predicted != taken {
-                    result = Some(target);
+                let correct = predicted == taken;
+                if !correct {
+                    result = Some(if taken { target } else { pc_plus_4 });
                 }
+                self.zb_predictor.update(pc, target, correct);
+                self.branch_predictor.update(pc, taken);
             }
             ReadyRobEntry::Store {
                 store,

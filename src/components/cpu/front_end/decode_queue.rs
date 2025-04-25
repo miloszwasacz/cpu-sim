@@ -86,9 +86,8 @@ pub struct Decoded {
     pub full: FullInstruction,
     pub pc: Pc,
     pub pc_plus_4: Pc,
-    /// The predicted address of a jump/branch.
-    /// For PC-based jumps this is the actual target address.
-    pub predicted: Option<Address>,
-    /// The pre-computed target address of a branch.
-    pub target: Option<Address>,
+    /// The predicted target address of a jump or a branch.
+    pub predicted: Address,
+    /// The pre-computed target address of pc-based jumps or branches.
+    pub target: Address,
 }

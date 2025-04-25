@@ -22,9 +22,7 @@ impl RobEntry<NotReady> {
     pub fn jump(pc: Pc, predicted: Address, link_reg: RegName, link_data: RegData) -> Self {
         Self(
             NotReady::Jump {
-                // TODO Uncomment after fixing pc-based jump target pre-computation
-                // predicted,
-                predicted: 0,
+                predicted,
                 link_reg,
                 link_data,
             },
@@ -32,13 +30,12 @@ impl RobEntry<NotReady> {
         )
     }
 
-    pub fn branch(pc: Pc, predicted: bool, target: Address) -> Self {
+    pub fn branch(pc: Pc, pc_plus_4: Pc, predicted: bool, target: Address) -> Self {
         Self(
             NotReady::Branch {
-                // TODO Uncomment after fixing pc-based jump target pre-computation
-                // predicted,
-                predicted: false,
+                predicted,
                 target,
+                pc_plus_4,
             },
             pc,
         )
@@ -97,12 +94,17 @@ impl RobEntry<NotReady> {
                     target,
                 }
             }),
-            NotReady::Branch { predicted, target } => {
+            NotReady::Branch {
+                predicted,
+                target,
+                pc_plus_4,
+            } => {
                 extract_result!(data, ExecResultData::Branch { taken } => {
                     ReadyRobEntry::Branch {
                         predicted,
                         target,
                         taken,
+                        pc_plus_4,
                     }
                 })
             }
@@ -125,12 +127,16 @@ impl RobEntry<NotReady> {
 }
 
 impl RobEntry<Ready> {
-    pub fn jump(pc: Pc, link_reg: RegName, link_data: RegData, target: Address) -> Self {
+    pub fn jump(
+        pc: Pc,
+        predicted: Address,
+        link_reg: RegName,
+        link_data: RegData,
+        target: Address,
+    ) -> Self {
         Self(
             Ok(ReadyRobEntry::Jump {
-                // TODO Uncomment after fixing pc-based jump target pre-computation
-                // predicted: target,
-                predicted: 0,
+                predicted,
                 link_reg,
                 link_data,
                 target,
@@ -192,6 +198,7 @@ pub enum NotReadyRobEntry {
         /// The target address computed assuming the branch is taken, computed during decode.
         /// Should be supplied when the instruction is issued.
         target: Address,
+        pc_plus_4: Address,
     },
     Load {
         /// The register where the result will be put.
@@ -243,6 +250,7 @@ pub enum ReadyRobEntry {
         target: Address,
         /// Whether the branch has actually been taken.
         taken: bool,
+        pc_plus_4: Address,
     },
     Load {
         /// The register where the result will be put.

@@ -3,7 +3,9 @@ use self::alu::Alu;
 use self::branch::BranchUnit;
 use super::rob::RobIndex;
 use super::scheduler::{Ready, RsEntry, Scheduler};
-use super::{OperationType, Schedulers};
+#[cfg(debug_assertions)]
+use super::OperationType;
+use super::Schedulers;
 use crate::components::cpu::error::Exception;
 use crate::components::cpu::reg::RegData;
 use crate::components::memory::Address;
@@ -25,10 +27,10 @@ pub struct ExecUnit(());
 
 impl ExecUnit {
     #[inline]
-    fn new(scheduler: &Scheduler) -> Self {
+    fn new(_scheduler: &Scheduler) -> Self {
         #[cfg(debug_assertions)]
         {
-            let ops = scheduler.supported_ops();
+            let ops = _scheduler.supported_ops();
             Self { ops }
         }
         #[cfg(not(debug_assertions))]
@@ -38,12 +40,15 @@ impl ExecUnit {
     }
 
     pub fn process(&mut self, instr: RsEntry<Ready>) -> ExecResult {
-        debug_assert!(
-            self.ops.contains(instr.op_type),
-            "invalid instruction type: supported {:?}, got {:?}",
-            self.ops,
-            instr.op_type
-        );
+        #[cfg(debug_assertions)]
+        {
+            assert!(
+                self.ops.contains(instr.op_type),
+                "invalid instruction type: supported {:?}, got {:?}",
+                self.ops,
+                instr.op_type
+            );
+        }
 
         ExecResult {
             tag: instr.dest,
@@ -90,6 +95,7 @@ pub enum ExecResultData {
     Jump {
         target: Address,
     },
+    JumpLink(RegData),
     Branch {
         taken: bool,
     },

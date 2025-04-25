@@ -3,11 +3,13 @@ use self::exec_engine::{
     CommonDataBus, ExecUnit, OperationType, ReorderBuffer, RobIndex, Scheduler, Schedulers,
 };
 use self::flip_flop::{Clearable, Sequential, StallingFlipFlop};
-use self::front_end::{DecodeQueue, Decoder, JumpAgu, PcAdder};
+use self::front_end::{
+    BranchPredictor, DecodeQueue, Decoder, JumpAgu, PcAdder, ZeroBubblePredictor,
+};
 use self::mem_subsystem::LoadQueue;
-use self::reg::pipeline::IfIdRegs;
+use self::reg::pipeline::{BpRegs, IfRegs, ZbpRegs};
 use self::reg::{RegFile, RegName};
-use super::memory::{Address, MemHierarchy, Memory};
+use super::memory::{Address, MemHierarchy, MemSize, Memory};
 use crate::config::Immutable;
 use crate::instr::{EnvTrap, SyscallCode};
 use crate::os::Os;
@@ -27,12 +29,21 @@ mod mem_subsystem;
 pub(crate) mod reg;
 
 //TODO Make configurable
-const DECODE_WIDTH: NonZeroUsize = NonZeroUsize::new(4).unwrap();
+const FETCH_WIDTH: NonZeroUsize = NonZeroUsize::new(4).unwrap();
+const ZBP_CAPACITY: NonZeroUsize = NonZeroUsize::new(1024).unwrap();
+const BP_CAPACITY: NonZeroUsize = NonZeroUsize::new(MemSize(16).KiB()).unwrap();
 const DECODE_QUEUE_CAPACITY: NonZeroUsize = NonZeroUsize::new(16).unwrap();
 const ISSUE_WIDTH: Immutable<NonZeroUsize> = Immutable::new(NonZeroUsize::new(4).unwrap());
 const ROB_CAPACITY: NonZeroUsize = NonZeroUsize::new(96).unwrap();
 const SCHEDULER_CAPACITY: NonZeroUsize = NonZeroUsize::new(16).unwrap();
 const LOAD_QUEUE_CAPACITY: NonZeroUsize = NonZeroUsize::new(20).unwrap();
+const EXEC_UNITS: [OperationType; 5] = [
+    OperationType::ALU,
+    OperationType::ALU,
+    OperationType::BRANCH,
+    OperationType::LOAD,
+    OperationType::STORE,
+];
 
 type Stall = bool;
 type Pc = Address;
@@ -54,8 +65,12 @@ struct CycleResult {
 pub struct Cpu<I, O, E> {
     // Front End
     pc: StallingFlipFlop<Pc>,
-    pc_adder: PcAdder,
-    if_id_regs: StallingFlipFlop<Box<[IfIdRegs]>>,
+    pc_adders: Box<[PcAdder]>,
+    zb_predictor: ZeroBubblePredictor,
+    zbp_regs: StallingFlipFlop<Box<[ZbpRegs]>>,
+    if_regs: StallingFlipFlop<Box<[IfRegs]>>,
+    branch_predictor: BranchPredictor,
+    bp_regs: StallingFlipFlop<Box<[BpRegs]>>,
     decoders: Box<[Decoder]>,
     jump_agus: Box<[JumpAgu]>,
     decode_queue: DecodeQueue,
@@ -80,26 +95,25 @@ pub struct Cpu<I, O, E> {
 
 impl<I: Read, O: Write, E: Write> Cpu<I, O, E> {
     pub fn new(mem: Arc<Mutex<Memory>>, os: Os<I, O, E>) -> Self {
+        let pc_adders = vec![PcAdder::new(); FETCH_WIDTH.get()].into_boxed_slice();
         //TODO Get schedulers & exec units from config
-        let schedulers: Schedulers = [
-            OperationType::ALU,
-            OperationType::ALU,
-            OperationType::BRANCH,
-            OperationType::LOAD,
-            OperationType::STORE,
-        ]
-        .into_iter()
-        .map(|op| Scheduler::new(op, SCHEDULER_CAPACITY))
-        .collect();
+        let schedulers: Schedulers = EXEC_UNITS
+            .into_iter()
+            .map(|op| Scheduler::new(op, SCHEDULER_CAPACITY))
+            .collect();
         let exec_units = Vec::from(&schedulers).into_boxed_slice();
         let mem_hierarchy = MemHierarchy::new(mem);
 
         Self {
             pc: StallingFlipFlop::new(Pc::default()),
-            pc_adder: PcAdder::new(),
-            if_id_regs: StallingFlipFlop::new(vec![].into_boxed_slice()),
-            decoders: vec![Decoder::new(); DECODE_WIDTH.get()].into_boxed_slice(),
-            jump_agus: vec![JumpAgu::new(); DECODE_WIDTH.get()].into_boxed_slice(),
+            pc_adders,
+            zb_predictor: ZeroBubblePredictor::with_capacity(ZBP_CAPACITY),
+            zbp_regs: StallingFlipFlop::new(vec![].into_boxed_slice()),
+            branch_predictor: BranchPredictor::with_capacity(BP_CAPACITY),
+            bp_regs: StallingFlipFlop::new(vec![].into_boxed_slice()),
+            if_regs: StallingFlipFlop::new(vec![].into_boxed_slice()),
+            decoders: vec![Decoder::new(); FETCH_WIDTH.get()].into_boxed_slice(),
+            jump_agus: vec![JumpAgu::new(); FETCH_WIDTH.get()].into_boxed_slice(),
             decode_queue: DecodeQueue::with_capacity(DECODE_QUEUE_CAPACITY),
 
             issue_width: ISSUE_WIDTH,
@@ -256,34 +270,49 @@ impl<I, O, E> Cpu<I, O, E> {
     }
 
     fn clock_cycle(&mut self) -> CycleResult {
-        let new_pc = self.fetch();
-        let stall = self.decode();
+        let new_pc = self.zb_predict();
+        let fetch_stall = self.fetch();
+        let bp_jump = self.branch_prediction();
+        let decode_result = self.decode();
         self.issue();
         self.execute();
         self.write_result();
         let mispredicted = self.commit();
 
-        // PC MUX
-        match mispredicted {
-            Some(jump) => {
-                self.pc.write(jump);
-                self.flush_pipeline();
-            }
-            None if stall => {
-                self.pc.stall();
-                self.if_id_regs.stall();
-            }
-            None => self.pc.write(new_pc),
-        }
+        // PC multiplexer & pipeline register control signals
+        if let Some(jump) = mispredicted {
+            self.flush_pipeline();
+            self.pc.write(jump);
+        } else if let Err(jump) = decode_result {
+            self.zbp_regs.clear();
+            self.if_regs.clear();
+            self.bp_regs.clear();
+            self.pc.write(jump)
+        } else if let Ok(true) = decode_result {
+            self.pc.stall();
+            self.zbp_regs.stall();
+            self.if_regs.stall();
+            self.bp_regs.stall();
+        } else if let Some(jump) = bp_jump {
+            self.zbp_regs.clear();
+            self.if_regs.clear();
+            self.pc.write(jump);
+        } else if fetch_stall {
+            self.pc.stall();
+            self.zbp_regs.stall();
+            self.if_regs.clear();
+        } else {
+            self.pc.write(new_pc);
+        };
         self.finish_cycle();
 
         mem::take(&mut self.cycle_result)
     }
 
     fn flush_pipeline(&mut self) {
-        //TODO Flush as early as possible (i.e. before commit)
-        //     and clear only entries after the mispredicted one
-        self.if_id_regs.clear();
+        self.zbp_regs.clear();
+        self.if_regs.clear();
+        self.bp_regs.clear();
         self.decode_queue.clear();
         self.rob.clear();
         self.schedulers.clear();
@@ -300,7 +329,11 @@ impl<I, O, E> Cpu<I, O, E> {
 impl<I, O, E> Sequential for Cpu<I, O, E> {
     fn finish_cycle(&mut self) {
         self.pc.finish_cycle();
-        self.if_id_regs.finish_cycle();
+        self.zb_predictor.finish_cycle();
+        self.zbp_regs.finish_cycle();
+        self.if_regs.finish_cycle();
+        self.branch_predictor.finish_cycle();
+        self.bp_regs.finish_cycle();
         self.decode_queue.finish_cycle();
         self.rob.finish_cycle();
         self.schedulers.finish_cycle();

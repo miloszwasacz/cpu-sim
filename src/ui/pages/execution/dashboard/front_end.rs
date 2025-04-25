@@ -2,10 +2,11 @@ use super::EXCEPTION_COLOR;
 use crate::ui::model::FrontEndModel;
 use crate::ui::{block_style, Component, EventHandler, EventResult, Focusable, HasFocus};
 
+use cpu_sim::components::diagnostics::cpu::Prediction;
 use cpu_sim::components::diagnostics::fmt_addr;
 use ratatui::crossterm::event::Event;
 use ratatui::prelude::*;
-use ratatui::widgets::{Block, Borders, List, ListItem};
+use ratatui::widgets::{Block, Borders};
 
 #[derive(Default)]
 pub struct FrontEnd {
@@ -17,10 +18,8 @@ impl FrontEnd {
     pub const WIDTH: Constraint = Constraint::Fill(1);
 
     pub fn height(model: &<Self as Component>::Model) -> u16 {
-        const BORDER: u16 = 2;
-        const PC: u16 = 1;
-        const FETCHED_HEADER: u16 = 1;
-        BORDER + PC + FETCHED_HEADER + model.decode_width() as u16
+        const BORDER: u16 = 3;
+        BORDER + 2 * model.decode_width() as u16
     }
 }
 
@@ -28,33 +27,106 @@ impl Component for FrontEnd {
     type Model = FrontEndModel;
 
     fn render(&self, model: &Self::Model, area: Rect, buf: &mut Buffer) {
-        let block = Block::default()
+        let first_column_width = Constraint::Length(22);
+        let content_height = model.decode_width() as u16;
+        let [top, bottom] = Layout::vertical([
+            Constraint::Length(content_height + 1),
+            Constraint::Length(content_height + 2),
+        ])
+        .areas(area);
+
+        let [pc_area, fetch_area] =
+            Layout::horizontal([first_column_width, Constraint::Fill(1)]).areas(top);
+        let [zbp_area, bp_area] =
+            Layout::horizontal([first_column_width, Constraint::Fill(1)]).areas(bottom);
+
+        let pc_block = Block::default()
             .title("Front End")
-            .borders(Borders::ALL)
+            .borders(Borders::LEFT | Borders::TOP)
             .border_style(block_style(self.focused));
 
-        let [pc_area, fetched_header_area, fetched_area] = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Fill(1),
-        ])
-        .areas(block.inner(area));
-
-        let pc = fmt_addr(model.pc());
-        let fetched = model
-            .fetched()
-            .iter()
-            .map(|fetched| match fetched {
-                Ok(instr) => format!("{}", instr).into(),
-                Err(_) => Span::from("Exception").fg(EXCEPTION_COLOR),
+        let zbp_block = Block::default()
+            .title("Zero-bubble")
+            .borders(Borders::LEFT | Borders::TOP | Borders::BOTTOM)
+            .border_set(symbols::border::Set {
+                top_left: symbols::line::VERTICAL_RIGHT,
+                ..symbols::border::PLAIN
             })
-            .map(|span| Line::from(vec![Span::from(" ▶ "), span]))
-            .map(ListItem::from);
+            .border_style(block_style(self.focused));
 
-        block.render(area, buf);
-        Line::from_iter([Span::from("PC: ").bold(), Span::from(pc)]).render(pc_area, buf);
-        Line::from(Span::from("Fetched:").bold()).render(fetched_header_area, buf);
-        Widget::render(List::new(fetched), fetched_area, buf);
+        let fetch_block = Block::default()
+            .title("Fetch")
+            .borders(Borders::LEFT | Borders::RIGHT | Borders::TOP)
+            .border_set(symbols::border::Set {
+                top_left: symbols::line::HORIZONTAL_DOWN,
+                ..symbols::border::PLAIN
+            })
+            .border_style(block_style(self.focused));
+
+        let bp_block = Block::default()
+            .title("Branch predictor")
+            .borders(Borders::ALL)
+            .border_set(symbols::border::Set {
+                top_left: symbols::line::CROSS,
+                bottom_left: symbols::line::HORIZONTAL_UP,
+                top_right: symbols::line::VERTICAL_LEFT,
+                ..symbols::border::PLAIN
+            })
+            .border_style(block_style(self.focused));
+
+        // PC
+        Line::from(vec![Span::from("PC: ").bold(), fmt_addr(model.pc()).into()])
+            .render(pc_block.inner(pc_area), buf);
+        pc_block.render(pc_area, buf);
+
+        // ZBP
+        let lines = model
+            .zbp_regs()
+            .iter()
+            .map(|regs| {
+                let predicted = regs.predicted.map(fmt_addr).unwrap_or("-".to_string());
+                format!(" ▶ {}: {}", fmt_addr(regs.pc), predicted)
+            })
+            .map(Line::from)
+            .collect::<Vec<_>>();
+        Text::from(lines).render(zbp_block.inner(zbp_area), buf);
+        zbp_block.render(zbp_area, buf);
+
+        // Fetch
+        let lines = model
+            .if_regs()
+            .iter()
+            .map(|regs| {
+                let mut line = Line::from(format!(" ▶ {}: ", fmt_addr(regs.pc)));
+                line += match regs.instr {
+                    Ok(instr) => Span::from(format!("{}", instr)),
+                    Err(_) => Span::from("Exception").fg(EXCEPTION_COLOR),
+                };
+                line
+            })
+            .collect::<Vec<_>>();
+        Text::from(lines).render(fetch_block.inner(fetch_area), buf);
+        fetch_block.render(fetch_area, buf);
+
+        // Branch Prediction
+        let lines = model
+            .bp_regs()
+            .iter()
+            .map(|regs| {
+                format!(
+                    " ▶ {}: {}",
+                    fmt_addr(regs.pc),
+                    match regs.predicted {
+                        Prediction::NotTaken => "not taken".to_string(),
+                        Prediction::TakenUnknown => "taken".to_string(),
+                        Prediction::Taken(addr) => format!("taken ({})", fmt_addr(addr)),
+                    }
+                )
+            })
+            .map(Line::from)
+            .collect::<Vec<_>>();
+        Text::from(lines).render(bp_block.inner(bp_area), buf);
+        bp_block.render(bp_area, buf);
     }
 }
 

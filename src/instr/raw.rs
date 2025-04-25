@@ -1,8 +1,11 @@
+pub use self::raw_type::RawInstrType;
 pub(crate) use super::decode::REG_LEN;
 
 use const_format::formatcp;
 use std::fmt;
 use std::ops::{BitAnd, BitOr, Not, Shl, Shr};
+
+mod raw_type;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RawInstr {

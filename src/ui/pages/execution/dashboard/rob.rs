@@ -48,7 +48,7 @@ impl StatefulComponent for Rob {
                     }
                     RobEntrySnapshot::Ready(entry) => {
                         let (text, color) = match entry.data {
-                            Ok(entry) => match entry {
+                            Ok(ready) => match ready {
                                 Ready::Alu { dest, value } => {
                                     (format!("ALU    {:#}, {}", dest, value.i()), READY_COLOR)
                                 }
@@ -74,14 +74,25 @@ impl StatefulComponent for Rob {
                                     predicted,
                                     target,
                                     taken,
-                                } => (
-                                    format!("BRANCH                {}", fmt_addr(target)),
-                                    if predicted == taken {
+                                    pc_plus_4: _,
+                                } => {
+                                    let color = if predicted == taken {
                                         READY_COLOR
                                     } else {
                                         MISPREDICTED_COLOR
-                                    },
-                                ),
+                                    };
+                                    line += Span::from(format!(
+                                        "{}: BRANCH                ",
+                                        fmt_addr(entry.addr)
+                                    ))
+                                    .fg(color);
+                                    let mut target = Span::from(fmt_addr(target)).fg(color);
+                                    if !taken {
+                                        target = target.crossed_out().dim();
+                                    }
+                                    line += target;
+                                    return line;
+                                }
                                 Ready::Load { dest, value } => {
                                     (format!("LOAD   {:#}, {}", dest, value.i()), READY_COLOR)
                                 }

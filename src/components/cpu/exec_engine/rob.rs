@@ -1,9 +1,9 @@
 pub(super) use self::entry::{NotReady, Ready, ReadyRobEntry, RobEntry};
-use self::flip_flop::RobLenFlipFlop;
+use self::flip_flop::{RobLenFlipFlop, RobTrapFlipFlop};
 pub use self::index::RobIndex;
 use self::iter::Iter;
 pub(super) use self::lock::RobLock;
-use super::exec_unit::ExecResult;
+use super::exec_unit::{ExecResult, ExecResultData};
 use crate::components::cpu::flip_flop::{Clearable, FlipFlop, Sequential};
 use crate::components::cpu::reg::FutureFile;
 use crate::components::memory::Address;
@@ -52,6 +52,7 @@ pub struct ReorderBuffer {
     buffer: Box<[FlipFlop<RobEntryHolder>]>,
     head: FlipFlop<RobIndex>,
     len: RobLenFlipFlop,
+    has_trap: RobTrapFlipFlop,
 }
 
 impl ReorderBuffer {
@@ -61,6 +62,7 @@ impl ReorderBuffer {
             buffer: buffer.into_boxed_slice(),
             head: FlipFlop::new(Default::default()),
             len: Default::default(),
+            has_trap: Default::default(),
         }
     }
 
@@ -75,19 +77,28 @@ impl ReorderBuffer {
 
     pub fn pop_if_ready(&mut self) -> Option<RobEntry<Ready>> {
         let head = *self.head.read();
-        self.get_mut(head).take_if_ready().inspect(|_| {
+        self.get_mut(head).take_if_ready().inspect(|entry| {
             self.head.write(head.add(self, 1));
             self.len.pop();
+            if entry.data().is_err() {
+                debug_assert!(self.has_trap.read());
+                self.has_trap.pop();
+            }
         })
     }
 
     pub fn update_from_cdb(&mut self, future_file: &mut FutureFile, results: &[ExecResult]) {
         for result in results {
             let holder = self.get_mut(result.tag);
-            let ready = match holder.read() {
-                RobEntryHolder::NotReady(not_ready) => not_ready.update(result),
+            let (ready, new) = match *holder.read() {
+                RobEntryHolder::NotReady(not_ready) => (not_ready.update(result), true),
                 RobEntryHolder::Empty => unreachable!("instruction already commited"),
-                RobEntryHolder::Ready(_) => unreachable!("instruction executed more than once"),
+                RobEntryHolder::Ready(ready) => {
+                    if !matches!(result.result, Ok(ExecResultData::JumpLink(_))) {
+                        panic!("instruction executed more than once");
+                    }
+                    (ready, false)
+                }
             };
             //TODO If the instruction produces an exception,
             //     the destination register in the future file will not be freed
@@ -101,7 +112,9 @@ impl ReorderBuffer {
                 } => future_file[*dest].write_result(result.tag, *value),
                 ReadyRobEntry::Branch { .. } | ReadyRobEntry::Store { .. } => {}
             });
-            holder.write(RobEntryHolder::Ready(ready));
+            if new {
+                holder.write(RobEntryHolder::Ready(ready));
+            }
         }
     }
 
@@ -147,6 +160,7 @@ impl Sequential for ReorderBuffer {
         }
         self.head.finish_cycle();
         self.len.finish_cycle();
+        self.has_trap.finish_cycle();
     }
 }
 
@@ -157,6 +171,7 @@ impl Clearable for ReorderBuffer {
         }
         self.head.clear();
         self.len.clear();
+        self.has_trap.clear();
     }
 }
 

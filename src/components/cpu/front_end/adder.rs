@@ -8,6 +8,7 @@ use crate::instr::Immediate;
 
 //#region PcAdder
 
+#[derive(Clone)]
 pub struct PcAdder(());
 
 impl PcAdder {
