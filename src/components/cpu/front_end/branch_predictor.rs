@@ -12,16 +12,24 @@ mod two_bit;
 
 type ZbEntry = Option<(Address, Address)>;
 
-pub struct ZeroBubblePredictor(Box<[FlipFlop<ZbEntry>]>);
+pub struct ZeroBubblePredictor {
+    entries: Box<[FlipFlop<ZbEntry>]>,
+    correct: usize,
+    incorrect: usize,
+}
 
 impl ZeroBubblePredictor {
     pub fn with_capacity(capacity: NonZeroUsize) -> Self {
-        Self(vec![FlipFlop::new(None); capacity.get()].into_boxed_slice())
+        Self {
+            entries: vec![FlipFlop::new(None); capacity.get()].into_boxed_slice(),
+            correct: 0,
+            incorrect: 0,
+        }
     }
 
     pub fn predict(&self, pc: Pc) -> Option<Pc> {
-        let index = to_index(pc, self.0.len());
-        self.0[index]
+        let index = to_index(pc, self.entries.len());
+        self.entries[index]
             .read()
             .as_ref()
             .filter(|(addr, _)| *addr == pc)
@@ -29,27 +37,41 @@ impl ZeroBubblePredictor {
     }
 
     pub fn update(&mut self, pc: Address, target: Address, correct: bool) {
-        let index = to_index(pc, self.0.len());
-        let entry = match *self.0[index].read() {
+        let index = to_index(pc, self.entries.len());
+        let entry = match *self.entries[index].read() {
             entry @ Some((saved_pc, _)) if saved_pc == pc => entry.filter(|_| correct),
             _ if correct => Some((pc, target)),
             entry => entry,
         };
-        self.0[index].write(entry);
+        self.entries[index].write(entry);
+
+        if correct {
+            self.correct += 1;
+        } else {
+            self.incorrect += 1;
+        }
     }
 }
 
 impl Sequential for ZeroBubblePredictor {
     fn finish_cycle(&mut self) {
-        self.0.iter_mut().for_each(FlipFlop::finish_cycle);
+        self.entries.iter_mut().for_each(FlipFlop::finish_cycle);
     }
 }
 
-pub struct BranchPredictor(Box<[FlipFlop<TwoBitPredict>]>);
+pub struct BranchPredictor {
+    entries: Box<[FlipFlop<TwoBitPredict>]>,
+    correct: usize,
+    incorrect: usize,
+}
 
 impl BranchPredictor {
     pub fn with_capacity(capacity: NonZeroUsize) -> Self {
-        Self(vec![FlipFlop::new(Default::default()); capacity.get()].into_boxed_slice())
+        Self {
+            entries: vec![FlipFlop::new(Default::default()); capacity.get()].into_boxed_slice(),
+            correct: 0,
+            incorrect: 0,
+        }
     }
 
     pub fn predict(&self, instr: Result<RawInstr, Exception>, addr: Pc) -> bool {
@@ -62,22 +84,28 @@ impl BranchPredictor {
             RawInstrType::Regular => false,
             RawInstrType::Jump => true,
             RawInstrType::Branch => {
-                let index = to_index(addr, self.0.len());
-                self.0[index].read().predict()
+                let index = to_index(addr, self.entries.len());
+                self.entries[index].read().predict()
             }
         }
     }
 
-    pub fn update(&mut self, addr: Address, taken: bool) {
-        let index = to_index(addr, self.0.len());
-        let current = self.0[index].read();
-        self.0[index].write(current.updated(taken));
+    pub fn update(&mut self, addr: Address, taken: bool, correct: bool) {
+        let index = to_index(addr, self.entries.len());
+        let current = self.entries[index].read();
+        self.entries[index].write(current.updated(taken));
+
+        if correct {
+            self.correct += 1;
+        } else {
+            self.incorrect += 1;
+        }
     }
 }
 
 impl Sequential for BranchPredictor {
     fn finish_cycle(&mut self) {
-        self.0.iter_mut().for_each(FlipFlop::finish_cycle);
+        self.entries.iter_mut().for_each(FlipFlop::finish_cycle);
     }
 }
 

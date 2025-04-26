@@ -264,7 +264,7 @@ impl<I, O, E> Cpu<I, O, E> {
                     result = Some(target);
                 };
                 self.zb_predictor.update(pc, target, correct);
-                self.branch_predictor.update(pc, true);
+                self.branch_predictor.update(pc, true, correct);
                 self.cycle_result.jump_to_self = pc == target;
             }
             ReadyRobEntry::Branch {
@@ -278,7 +278,7 @@ impl<I, O, E> Cpu<I, O, E> {
                     result = Some(if taken { target } else { pc_plus_4 });
                 }
                 self.zb_predictor.update(pc, target, correct);
-                self.branch_predictor.update(pc, taken);
+                self.branch_predictor.update(pc, taken, correct);
             }
             ReadyRobEntry::Store {
                 store,
@@ -297,6 +297,7 @@ impl<I, O, E> Cpu<I, O, E> {
             }
         }
 
+        self.stats.executed_instrs += 1;
         result
     }
 }

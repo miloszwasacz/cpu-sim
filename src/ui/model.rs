@@ -60,11 +60,12 @@ impl CpuModel {
 impl From<CpuSnapshot> for CpuModel {
     fn from(snapshot: CpuSnapshot) -> Self {
         let CpuSnapshot {
+            stats,
             pc,
-            zb_predictor: _,
+            zb_predictor,
             zbp_regs,
             if_regs,
-            branch_predictor: _,
+            branch_predictor,
             bp_regs,
             decode_width,
             decode_queue,
@@ -75,7 +76,16 @@ impl From<CpuSnapshot> for CpuModel {
             load_queue,
         } = snapshot;
 
-        let front_end = FrontEndModel::new(pc, zbp_regs, if_regs, bp_regs, decode_width);
+        let front_end = FrontEndModel::new(
+            stats,
+            pc,
+            zb_predictor,
+            zbp_regs,
+            if_regs,
+            branch_predictor,
+            bp_regs,
+            decode_width,
+        );
         let decode_queue = DecodeQueueModel::new(decode_queue);
         let rob = RobModel::new(rob);
         let schedulers = SchedulersModel::new(schedulers);

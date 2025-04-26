@@ -3,7 +3,7 @@ pub use super::exec_engine::diagnostics::*;
 pub use super::front_end::diagnostics::*;
 pub use super::mem_subsystem::diagnostics::*;
 pub use super::reg::diagnostics::*;
-pub use super::reg::pipeline::{BpRegs, IfRegs, ZbpRegs, Prediction};
+pub use super::reg::pipeline::{BpRegs, IfRegs, Prediction, ZbpRegs};
 pub use super::AluControl;
 pub use crate::instr::full::FullInstruction as Instruction;
 pub use crate::instr::raw::RawInstr;
@@ -13,6 +13,7 @@ use super::{Cpu, Pc};
 use crate::components::diagnostics::Diagnostics;
 
 pub struct CpuSnapshot {
+    pub stats: CpuStats,
     pub pc: Pc,
     pub zb_predictor: ZbPredictorSnapshot,
     pub zbp_regs: Box<[ZbpRegs]>,
@@ -28,11 +29,28 @@ pub struct CpuSnapshot {
     pub load_queue: LoadQueueSnapshot,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CpuStats {
+    pub clock_cycle: usize,
+    pub executed_instrs: usize,
+}
+
+impl CpuStats {
+    pub fn ipc(&self) -> f32 {
+        if self.clock_cycle == 0 {
+            return 0.0;
+        }
+
+        self.executed_instrs as f32 / self.clock_cycle as f32
+    }
+}
+
 impl<I, O, E> Diagnostics for Cpu<I, O, E> {
     type Output = CpuSnapshot;
 
     fn diagnostics(&self) -> Self::Output {
         Self::Output {
+            stats: self.stats,
             pc: *self.pc.read(),
             zb_predictor: self.zb_predictor.diagnostics(),
             zbp_regs: self.zbp_regs.read().clone(),

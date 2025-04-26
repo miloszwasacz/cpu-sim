@@ -5,8 +5,8 @@ It was made for the Advanced Computer Architecture (COMS30046) unit at Universit
 
 ## Prerequisites
 
-- [Docker](https://www.docker.com/)
-- [Rust 1.83](https://www.rust-lang.org/)
+- [Rust 1.85 & Cargo](https://www.rust-lang.org/) -- for compiling the simulator
+- [Docker](https://www.docker.com/) _(optional)_ -- for compiling example programs
 
 ## Usage
 
@@ -16,17 +16,20 @@ git clone git@github.com:miloszwasacz/cpu-sim.git
 cd cpu-sim
 ```
 
-Then, to compile test programs, run the Docker image with RISC-V toolchain
+Then, to compile test programs, run the Docker image with RISC-V toolchain:
 ```shell
 docker compose run --remove-orphans riscv-toolchain
 
-# Inside docker container, choose a file from the test/ directory
-./compile <test-file>
+# Inside the docker container, run GNU Make to compile 
+# all programs from the `test/res/` directory
+make 
+
+exit # Exit the docker container
 ```
 
-Lastly, to run the compiled program on the simulator, change `FILE` in `main.rs` and run:
+Lastly, to compile the simulator and run a RISC-V program:
 ```shell
-cargo run
+cargo run --features="build-binary" --release -- "<path-to-riscv-binary>"
 ```
 
 [//]: # (<!--TODO Improve README)

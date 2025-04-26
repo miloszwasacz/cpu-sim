@@ -14,12 +14,15 @@ pub struct FrontEnd {
 }
 
 impl FrontEnd {
-    // pub const WIDTH: Constraint = Constraint::Length(38);
     pub const WIDTH: Constraint = Constraint::Fill(1);
 
     pub fn height(model: &<Self as Component>::Model) -> u16 {
-        const BORDER: u16 = 3;
-        BORDER + 2 * model.decode_width() as u16
+        Self::block_heights(model).iter().sum()
+    }
+
+    fn block_heights(model: &<Self as Component>::Model) -> [u16; 2] {
+        let content_height = model.decode_width() as u16;
+        [5.max(content_height + 1), content_height + 3]
     }
 }
 
@@ -28,12 +31,8 @@ impl Component for FrontEnd {
 
     fn render(&self, model: &Self::Model, area: Rect, buf: &mut Buffer) {
         let first_column_width = Constraint::Length(22);
-        let content_height = model.decode_width() as u16;
-        let [top, bottom] = Layout::vertical([
-            Constraint::Length(content_height + 1),
-            Constraint::Length(content_height + 2),
-        ])
-        .areas(area);
+        let [top, bottom] =
+            Layout::vertical(Self::block_heights(model).map(Constraint::Length)).areas(area);
 
         let [pc_area, fetch_area] =
             Layout::horizontal([first_column_width, Constraint::Fill(1)]).areas(top);
@@ -41,7 +40,7 @@ impl Component for FrontEnd {
             Layout::horizontal([first_column_width, Constraint::Fill(1)]).areas(bottom);
 
         let pc_block = Block::default()
-            .title("Front End")
+            .title("PC & Diagnostics")
             .borders(Borders::LEFT | Borders::TOP)
             .border_style(block_style(self.focused));
 
@@ -74,21 +73,36 @@ impl Component for FrontEnd {
             })
             .border_style(block_style(self.focused));
 
-        // PC
-        Line::from(vec![Span::from("PC: ").bold(), fmt_addr(model.pc()).into()])
+        // PC & General diagnostics
+        let stats = model.stats();
+        let make_line = |header, contents| {
+            let header = format!("{}: ", header);
+            Line::from(vec![Span::from(header).bold(), Span::from(contents)])
+        };
+        let pc_line = make_line("PC", fmt_addr(model.pc()));
+        let clock_cycle_line = make_line("Clock cycle", stats.clock_cycle.to_string());
+        let ipc_line = make_line("IPC", format!("{:.5}", stats.ipc()));
+        Text::from(vec![pc_line, Line::default(), clock_cycle_line, ipc_line])
             .render(pc_block.inner(pc_area), buf);
         pc_block.render(pc_area, buf);
 
         // ZBP
-        let lines = model
+        let entries = model
             .zbp_regs()
             .iter()
             .map(|regs| {
                 let predicted = regs.predicted.map(fmt_addr).unwrap_or("-".to_string());
                 format!(" ▶ {}: {}", fmt_addr(regs.pc), predicted)
             })
-            .map(Line::from)
-            .collect::<Vec<_>>();
+            .map(Line::from);
+        let lines = [vec![
+            Span::from("Accuracy: ").bold(),
+            format!("{:.2}%", model.zb_predictor().accuracy() * 100.0).into(),
+        ]]
+        .into_iter()
+        .map(Line::from)
+        .chain(entries)
+        .collect::<Vec<_>>();
         Text::from(lines).render(zbp_block.inner(zbp_area), buf);
         zbp_block.render(zbp_area, buf);
 
@@ -109,7 +123,7 @@ impl Component for FrontEnd {
         fetch_block.render(fetch_area, buf);
 
         // Branch Prediction
-        let lines = model
+        let entries = model
             .bp_regs()
             .iter()
             .map(|regs| {
@@ -123,8 +137,15 @@ impl Component for FrontEnd {
                     }
                 )
             })
-            .map(Line::from)
-            .collect::<Vec<_>>();
+            .map(Line::from);
+        let lines = [vec![
+            Span::from("Accuracy: ").bold(),
+            format!("{:.2}%", model.branch_predictor().accuracy() * 100.0).into(),
+        ]]
+        .into_iter()
+        .map(Line::from)
+        .chain(entries)
+        .collect::<Vec<_>>();
         Text::from(lines).render(bp_block.inner(bp_area), buf);
         bp_block.render(bp_area, buf);
     }

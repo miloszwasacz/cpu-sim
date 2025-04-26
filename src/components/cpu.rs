@@ -1,3 +1,4 @@
+use self::diagnostics::CpuStats;
 pub use self::exec_engine::exec_unit::alu::AluControl;
 use self::exec_engine::{
     CommonDataBus, ExecUnit, OperationType, ReorderBuffer, RobIndex, Scheduler, Schedulers,
@@ -88,6 +89,7 @@ pub struct Cpu<I, O, E> {
     mem_hierarchy: MemHierarchy,
 
     // Misc
+    stats: CpuStats,
     cycle_result: CycleResult,
     os: Os<I, O, E>,
     exit: bool,
@@ -126,6 +128,7 @@ impl<I: Read, O: Write, E: Write> Cpu<I, O, E> {
             load_queue: LoadQueue::with_capacity(LOAD_QUEUE_CAPACITY),
             mem_hierarchy,
 
+            stats: Default::default(),
             cycle_result: Default::default(),
             os,
             exit: false,
@@ -270,6 +273,8 @@ impl<I, O, E> Cpu<I, O, E> {
     }
 
     fn clock_cycle(&mut self) -> CycleResult {
+        self.stats.clock_cycle += 1;
+
         let new_pc = self.zb_predict();
         let fetch_stall = self.fetch();
         let bp_jump = self.branch_prediction();
