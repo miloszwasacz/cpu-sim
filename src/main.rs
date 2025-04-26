@@ -5,13 +5,19 @@ use cpu_sim::components::cpu::Cpu;
 use cpu_sim::components::memory::Memory;
 use cpu_sim::os::loader::Loader;
 use cpu_sim::os::Os;
+use std::env;
 use std::process::ExitCode;
 use std::sync::{Arc, Mutex};
 
 mod ui;
 
 fn main() -> ExitCode {
-    const FILE: &str = "test/res/bin/bubble_sort";
+    let args = env::args().collect::<Vec<_>>();
+    if args.len() != 2 {
+        println!("Usage: cpu-sim <path-to-binary>");
+        return ExitCode::SUCCESS;
+    }
+    let file = &args[1];
 
     let mem = Arc::new(Mutex::new(Memory::new()));
     let stdin = StdStream::default();
@@ -19,7 +25,7 @@ fn main() -> ExitCode {
     let stderr = StdStream::default();
     let os = Os::new(stdin, stdout, stderr);
     let mut cpu = Cpu::new(mem.clone(), os);
-    if let Err(err) = unsafe { Loader.load(FILE, &mut mem.lock().unwrap(), &mut cpu) } {
+    if let Err(err) = unsafe { Loader.load(file, &mut mem.lock().unwrap(), &mut cpu) } {
         eprintln!("Load error: {}", err);
         return ExitCode::FAILURE;
     }
