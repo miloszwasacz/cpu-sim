@@ -52,10 +52,17 @@ impl LoadQueue {
     }
 
     fn is_entry_ready(entry: &LoadQueueEntry, rob: &ReorderBuffer) -> bool {
+        let tag = entry.tag();
+
         // There can be no RAW hazards caused by preceding stores or traps
-        !rob.preceding_stores(entry.tag())
+        let raw_hazard = rob.preceding_stores(tag)
             .map_ok(|store| entry.has_hazard(store))
-            .any(|hazard| hazard.unwrap_or(true))
+            .any(|hazard| hazard.unwrap_or(true));
+
+        // The load cannot be speculative
+        let speculative = rob.is_entry_speculative(tag);
+
+        !raw_hazard && !speculative
     }
 }
 

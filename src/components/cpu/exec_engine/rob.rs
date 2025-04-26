@@ -145,6 +145,31 @@ impl ReorderBuffer {
         })
     }
 
+    pub fn is_entry_speculative(&self, index: RobIndex) -> bool {
+        let head = *self.head.read();
+        Iter::new(self, head..index).any(|h| match h.read() {
+            RobEntryHolder::Empty => false,
+            RobEntryHolder::NotReady(entry) => match entry.data() {
+                NotReady::Jump { .. } | NotReady::Branch { .. } => true,
+                NotReady::Alu { .. } | NotReady::Load { .. } | NotReady::Store { .. } => false,
+            },
+            RobEntryHolder::Ready(entry) => entry
+                .data()
+                .map(|entry| match entry {
+                    ReadyRobEntry::Jump {
+                        predicted, target, ..
+                    } => predicted != target,
+                    ReadyRobEntry::Branch {
+                        predicted, taken, ..
+                    } => predicted != taken,
+                    ReadyRobEntry::Alu { .. }
+                    | ReadyRobEntry::Load { .. }
+                    | ReadyRobEntry::Store { .. } => false,
+                })
+                .unwrap_or(true),
+        })
+    }
+
     pub(super) fn get_if_ready(&self, index: RobIndex) -> Option<&RobEntry<Ready>> {
         match self.get(index).read() {
             RobEntryHolder::Ready(ready) => Some(ready),
