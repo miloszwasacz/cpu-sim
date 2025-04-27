@@ -248,7 +248,7 @@ pub enum RegValue {
 
 impl RegValue {
     fn new(reg: RegName, future_file: &FutureFile) -> Self {
-        future_file.read(reg).map_or_else(Self::Rob, Self::Value)
+        unsafe { future_file.read(reg) }.map_or_else(Self::Rob, Self::Value)
     }
 
     fn update_from_rob(&mut self, rob: &ReorderBuffer) {

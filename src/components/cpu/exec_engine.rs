@@ -54,6 +54,7 @@ impl<I, O, E> Cpu<I, O, E> {
         let mut decoded = self.decode_queue.pop();
         let mut rob_lock = self.rob.lock();
         let mut future_file_lock = self.regs.future_file_mut().issue_lock();
+
         for priority in 0..self.issue_width.get() {
             let rob_entry_lock = match rob_lock.reserve() {
                 Some(lock) => lock,
@@ -234,70 +235,75 @@ impl<I, O, E> Cpu<I, O, E> {
     /// Returns then new PC if there was a branch misprediction.
     #[must_use]
     pub(super) fn commit(&mut self) -> Option<Address> {
+        let mut rob_lock = self.rob.lock();
+        let mut reg_lock = self.regs.commit_lock();
+        let mut zbp_lock = self.zb_predictor.update_lock();
+        let mut bp_lock = self.branch_predictor.update_lock();
         let mem = self.mem_hierarchy.l1d();
-        let mut result = Default::default();
 
-        // Commit
-        let entry = self.rob.pop_if_ready()?;
-        let data = match *entry.data() {
-            Ok(data) => data,
-            Err(trap) => {
-                self.cycle_result.traps.push(trap);
-                return None;
-            }
-        };
+        for priority in 0..self.commit_width.get() {
+            let entry = rob_lock.pop_if_ready()?;
+            self.stats.executed_instrs += 1;
 
-        let pc = entry.addr();
-        match data {
-            ReadyRobEntry::Alu { dest, value } | ReadyRobEntry::Load { dest, value } => {
-                self.regs.set(dest, value);
-            }
-            ReadyRobEntry::Jump {
-                predicted,
-                link_reg,
-                link_data,
-                target,
-            } => {
-                self.regs.set(link_reg, link_data);
-                let correct = predicted == target;
-                if !correct {
-                    result = Some(target);
-                };
-                self.zb_predictor.update(pc, target, correct);
-                self.branch_predictor.update(pc, true, correct);
-                self.cycle_result.jump_to_self = pc == target;
-            }
-            ReadyRobEntry::Branch {
-                predicted,
-                target,
-                taken,
-                pc_plus_4,
-            } => {
-                let correct = predicted == taken;
-                if !correct {
-                    result = Some(if taken { target } else { pc_plus_4 });
+            let pc = entry.addr();
+            let data = match *entry.data() {
+                Ok(data) => data,
+                Err(trap) => {
+                    self.cycle_result.traps.push(trap);
+                    return None;
                 }
-                self.zb_predictor.update(pc, target, correct);
-                self.branch_predictor.update(pc, taken, correct);
-            }
-            ReadyRobEntry::Store {
-                store,
-                byte_count: _,
-                src,
-                addr,
-            } => {
-                // We don't have to model store latency since the result can
-                // be bypassed to any outstanding loads with no delay
+            };
 
-                //TODO Technically, that is not true since loaded and stored data
-                //     might have different addresses but still overlap
+            match data {
+                ReadyRobEntry::Alu { dest, value } | ReadyRobEntry::Load { dest, value } => {
+                    reg_lock.set(dest, value, priority);
+                }
+                ReadyRobEntry::Jump {
+                    predicted,
+                    link_reg,
+                    link_data,
+                    target,
+                } => {
+                    reg_lock.set(link_reg, link_data, priority);
+                    let correct = predicted == target;
+                    zbp_lock.update(pc, target, correct, priority);
+                    bp_lock.update(pc, true, correct, priority);
+                    self.cycle_result.jump_to_self |= pc == target;
+                    if !correct {
+                        return Some(target);
+                    };
+                }
+                ReadyRobEntry::Branch {
+                    predicted,
+                    target,
+                    taken,
+                    pc_plus_4,
+                } => {
+                    let correct = predicted == taken;
+                    zbp_lock.update(pc, target, correct, priority);
+                    bp_lock.update(pc, taken, correct, priority);
+                    if !correct {
+                        return Some(if taken { target } else { pc_plus_4 });
+                    }
+                }
+                ReadyRobEntry::Store {
+                    store,
+                    byte_count: _,
+                    src,
+                    addr,
+                } => {
+                    // We don't have to model store latency since the result can
+                    // be bypassed to any outstanding loads with no delay
 
-                let value = self.regs.get(src);
-                store(mem, addr, value);
+                    //TODO Technically, that is not true since loaded and stored data
+                    //     might have different addresses but still overlap
+
+                    let value = unsafe { reg_lock.get(src) };
+                    store(mem, addr, value);
+                }
             }
         }
 
-        self.stats.executed_instrs += 1;
-        result
+        None
     }
 }

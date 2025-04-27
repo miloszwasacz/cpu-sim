@@ -1,3 +1,4 @@
+pub use self::lock::{BpUpdateLock, ZbpUpdateLock};
 use self::two_bit::TwoBitPredict;
 use crate::components::cpu::error::Exception;
 use crate::components::cpu::flip_flop::{FlipFlop, Sequential};
@@ -8,6 +9,7 @@ use crate::instr::raw::{RawInstr, RawInstrType};
 use std::num::NonZeroUsize;
 
 pub mod diagnostics;
+mod lock;
 mod two_bit;
 
 type ZbEntry = Option<(Address, Address)>;
@@ -36,20 +38,8 @@ impl ZeroBubblePredictor {
             .map(|(_, predicted)| *predicted)
     }
 
-    pub fn update(&mut self, pc: Address, target: Address, correct: bool) {
-        let index = to_index(pc, self.entries.len());
-        let entry = match *self.entries[index].read() {
-            entry @ Some((saved_pc, _)) if saved_pc == pc => entry.filter(|_| correct),
-            _ if correct => Some((pc, target)),
-            entry => entry,
-        };
-        self.entries[index].write(entry);
-
-        if correct {
-            self.correct += 1;
-        } else {
-            self.incorrect += 1;
-        }
+    pub fn update_lock(&mut self) -> ZbpUpdateLock {
+        ZbpUpdateLock::new(self)
     }
 }
 
@@ -90,16 +80,8 @@ impl BranchPredictor {
         }
     }
 
-    pub fn update(&mut self, addr: Address, taken: bool, correct: bool) {
-        let index = to_index(addr, self.entries.len());
-        let current = self.entries[index].read();
-        self.entries[index].write(current.updated(taken));
-
-        if correct {
-            self.correct += 1;
-        } else {
-            self.incorrect += 1;
-        }
+    pub fn update_lock(&mut self) -> BpUpdateLock {
+        BpUpdateLock::new(self)
     }
 }
 

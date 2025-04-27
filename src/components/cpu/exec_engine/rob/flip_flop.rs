@@ -6,7 +6,7 @@ use crate::components::cpu::flip_flop::{Clearable, Sequential};
 pub(super) struct RobLenFlipFlop {
     value: usize,
     pushed: usize,
-    popped: bool,
+    popped: usize,
     cleared: bool,
 }
 
@@ -21,9 +21,9 @@ impl RobLenFlipFlop {
         self.pushed = n;
     }
 
-    pub fn pop(&mut self) {
-        debug_assert!(!self.popped && !self.cleared);
-        self.popped = true;
+    pub fn pop(&mut self, n: usize) {
+        debug_assert!(self.popped == 0 && !self.cleared);
+        self.popped = n;
     }
 }
 
@@ -32,12 +32,7 @@ impl Sequential for RobLenFlipFlop {
         let value = if self.cleared {
             Default::default()
         } else {
-            let value = if self.popped {
-                self.value - 1
-            } else {
-                self.value
-            };
-            value + self.pushed
+            self.value - self.popped + self.pushed
         };
         *self = Self {
             value,

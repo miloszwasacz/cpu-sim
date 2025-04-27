@@ -20,6 +20,13 @@ impl RegFile {
         Default::default()
     }
 
+    pub(in crate::components::cpu) fn commit_lock(&mut self) -> RegFileCommitLock {
+        RegFileCommitLock {
+            file: self,
+            commited: [None; ARCH_REG_COUNT],
+        }
+    }
+
     pub fn get(&self, reg: RegName) -> RegData {
         self.0[reg.0].get()
     }
@@ -74,6 +81,45 @@ impl From<&RegFile> for super::diagnostics::RegFileSnapshot {
             let data = value.0[i].get().i();
             (name, data)
         }))
+    }
+}
+
+//#endregion
+
+//#region FutureFileIssueLock
+
+pub(in crate::components::cpu) struct RegFileCommitLock<'a> {
+    file: &'a mut RegFile,
+    commited: [Option<(usize, RegData)>; ARCH_REG_COUNT],
+}
+
+//TODO Add a note mentioning that the destructor HAS TO RUN to commit the instructions
+impl RegFileCommitLock<'_> {
+    pub unsafe fn get(&self, reg: RegName) -> RegData {
+        self.commited[reg.0]
+            .map(|(_, data)| data)
+            .unwrap_or_else(|| self.file.get(reg))
+    }
+
+    pub fn set(&mut self, reg: RegName, value: RegData, priority: usize) {
+        if !reg.is_zero() {
+            self.commited[reg.0] = match self.commited[reg.0] {
+                Some((p, _)) if p < priority => Some((priority, value)),
+                None => Some((priority, value)),
+                commited => commited,
+            }
+        }
+    }
+}
+
+impl Drop for RegFileCommitLock<'_> {
+    fn drop(&mut self) {
+        self.file
+            .0
+            .iter_mut()
+            .zip(self.commited.iter())
+            .filter_map(|(reg, new)| new.map(|(_, new)| (reg, new)))
+            .for_each(|(reg, new)| reg.set(new));
     }
 }
 
@@ -150,7 +196,7 @@ pub(in crate::components::cpu) struct FutureFileIssueLock<'a> {
 
 //TODO Add a note mentioning that the destructor HAS TO RUN to issue the new instructions
 impl FutureFileIssueLock<'_> {
-    pub fn read(&self, reg: RegName) -> Result<RegData, RobIndex> {
+    pub unsafe fn read(&self, reg: RegName) -> Result<RegData, RobIndex> {
         self.issued[reg.0]
             .map(|(_, index)| index)
             .map(Err)

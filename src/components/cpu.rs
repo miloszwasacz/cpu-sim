@@ -35,6 +35,7 @@ const ZBP_CAPACITY: NonZeroUsize = NonZeroUsize::new(1024).unwrap();
 const BP_CAPACITY: NonZeroUsize = NonZeroUsize::new(MemSize(16).KiB()).unwrap();
 const DECODE_QUEUE_CAPACITY: NonZeroUsize = NonZeroUsize::new(16).unwrap();
 const ISSUE_WIDTH: Immutable<NonZeroUsize> = Immutable::new(NonZeroUsize::new(4).unwrap());
+const COMMIT_WIDTH: Immutable<NonZeroUsize> = Immutable::new(NonZeroUsize::new(4).unwrap());
 const ROB_CAPACITY: NonZeroUsize = NonZeroUsize::new(96).unwrap();
 const SCHEDULER_CAPACITY: NonZeroUsize = NonZeroUsize::new(16).unwrap();
 const LOAD_QUEUE_CAPACITY: NonZeroUsize = NonZeroUsize::new(20).unwrap();
@@ -78,6 +79,7 @@ pub struct Cpu<I, O, E> {
 
     // Execution Engine
     issue_width: Immutable<NonZeroUsize>,
+    commit_width: Immutable<NonZeroUsize>,
     rob: ReorderBuffer,
     schedulers: Schedulers,
     regs: RegFile,
@@ -119,6 +121,7 @@ impl<I: Read, O: Write, E: Write> Cpu<I, O, E> {
             decode_queue: DecodeQueue::with_capacity(DECODE_QUEUE_CAPACITY),
 
             issue_width: ISSUE_WIDTH,
+            commit_width: COMMIT_WIDTH,
             rob: ReorderBuffer::with_capacity(ROB_CAPACITY),
             schedulers,
             regs: Default::default(),

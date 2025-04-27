@@ -19,7 +19,7 @@ mod index;
 mod iter;
 mod lock;
 
-//#region RobEntryHolder
+//#region ROB
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 enum RobEntryHolder {
@@ -28,23 +28,6 @@ enum RobEntryHolder {
     NotReady(RobEntry<NotReady>),
     Ready(RobEntry<Ready>),
 }
-
-impl FlipFlop<RobEntryHolder> {
-    fn take_if_ready(&mut self) -> Option<RobEntry<Ready>> {
-        match self.read() {
-            RobEntryHolder::Empty | RobEntryHolder::NotReady(_) => None,
-            RobEntryHolder::Ready(entry) => {
-                let entry = *entry;
-                self.write(RobEntryHolder::Empty);
-                Some(entry)
-            }
-        }
-    }
-}
-
-//#endregion
-
-//#region ROB
 
 type Item = FlipFlop<RobEntryHolder>;
 
@@ -73,18 +56,6 @@ impl ReorderBuffer {
 
     pub(super) fn lock(&mut self) -> RobLock {
         RobLock::new(self)
-    }
-
-    pub fn pop_if_ready(&mut self) -> Option<RobEntry<Ready>> {
-        let head = *self.head.read();
-        self.get_mut(head).take_if_ready().inspect(|entry| {
-            self.head.write(head.add(self, 1));
-            self.len.pop();
-            if entry.data().is_err() {
-                debug_assert!(self.has_trap.read());
-                self.has_trap.pop();
-            }
-        })
     }
 
     pub fn update_from_cdb(&mut self, future_file: &mut FutureFile, results: &[ExecResult]) {
