@@ -8,6 +8,7 @@
             <path value="file://$PROJECT_DIR$/crates/build/res" />
             <path value="file://$PROJECT_DIR$/test-res" />
             <path value="file://$PROJECT_DIR$/test/res" />
+            <path value="file://$PROJECT_DIR$/test/bench" />
           </resourceRoots>
         </entryData>
       </entry>

@@ -1,0 +1,17 @@
+asm(
+    "main:\n"
+    "li   t1, 0\n"
+    "li   t2, 1000\n"
+    "loop:\n"
+    "addi t1, t1, 1\n"
+    "addi t3, t3, 1\n"
+    "addi t4, t4, 2\n"
+    "addi t5, t5, 3\n"
+    "addi t6, t6, 4\n"
+    "bge  t2, t1, loop\n"
+    "li   a7, 93\n"
+    "ecall\n"
+    "li   a0, 0\n"
+    "exit:\n"
+    "j    exit"
+);
