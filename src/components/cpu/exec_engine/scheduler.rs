@@ -73,17 +73,6 @@ impl Scheduler {
         self.ops
     }
 
-    /// Finds an index of a reservation station.
-    /// Returns [`None`] if all reservation stations are busy.
-    fn find_empty(&self) -> Option<usize> {
-        self.entries
-            .iter()
-            .enumerate()
-            .filter(|(_, entry)| entry.read().is_empty())
-            .map(|(i, _)| i)
-            .next()
-    }
-
     /// Takes out the first ready instruction out of the scheduler.
     pub(super) fn take_first_ready(&mut self, rob: &ReorderBuffer) -> Option<RsEntry<Ready>> {
         self.entries.iter_mut().find_map(|rs| rs.take_if_ready(rob))
@@ -114,6 +103,7 @@ impl Clearable for Scheduler {
 pub struct Schedulers {
     schedulers: Box<[Scheduler]>,
     reserved: HashSet<usize>,
+    max_len: usize,
 }
 
 impl Schedulers {
@@ -122,12 +112,25 @@ impl Schedulers {
     }
 
     pub(super) fn reserve(&mut self, op: OperationType) -> Option<RsLock> {
-        self.schedulers
-            .iter()
-            .enumerate()
-            .filter(|(si, s)| !self.reserved.contains(si) && s.ops.contains(op))
-            .find_map(|(si, s)| s.find_empty().map(|rs| (si, rs)))
-            .map(|(si, rs)| RsLock::new(self, si, rs))
+        for i in 0..self.max_len {
+            let rs = self
+                .schedulers
+                .iter()
+                .enumerate()
+                .filter(|(si, _)| !self.reserved.contains(si))
+                .filter(|(_, s)| s.ops.contains(op))
+                .find_map(|(si, s)| {
+                    s.entries
+                        .get(i)
+                        .filter(|rs| rs.read().is_empty())
+                        .map(|_| si)
+                });
+
+            if let Some(si) = rs {
+                return Some(RsLock::new(self, si, i));
+            }
+        }
+        None
     }
 
     pub(super) fn iter(&self) -> Iter<Scheduler> {
@@ -183,9 +186,11 @@ impl FromIterator<Scheduler> for Schedulers {
     fn from_iter<T: IntoIterator<Item = Scheduler>>(iter: T) -> Self {
         let mut v = iter.into_iter().collect::<Vec<_>>();
         v.sort_unstable_by_key(|s| s.ops.bits());
+        let max_len = v.iter().map(|s| s.entries.len()).max().unwrap_or(0);
         Self {
             schedulers: v.into_boxed_slice(),
             reserved: Default::default(),
+            max_len,
         }
     }
 }
