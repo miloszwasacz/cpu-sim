@@ -1,0 +1,7 @@
+Program,static-taken,static-not-taken,two-bit
+carpet,39.84,64.27,67.16
+factorial,56.22,42.74,62.82
+independent_math,99.90,0.30,99.70
+matmul,58.26,42.35,61.10
+quicksort,55.65,55.42,73.09
+vectoradd,67.54,29.57,71.30
