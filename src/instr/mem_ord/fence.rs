@@ -1,9 +1,10 @@
+use crate::components::cpu::error::DecodeError;
 use crate::components::cpu::reg::RegName;
 use crate::instr::decode::encoding::ITypeFormat;
 use crate::instr::decode::Decode;
 use crate::instr::display::display_width;
 use crate::instr::raw::RawInstr;
-use crate::instr::{Immediate, Instruction};
+use crate::instr::{EnvTrap, Immediate, Instruction};
 
 use std::fmt;
 
@@ -82,7 +83,10 @@ impl Decode for Fence {
 
 impl From<Fence> for Instruction {
     fn from(_value: Fence) -> Self {
-        todo!("Properly implement the FENCE instruction")
+        //TODO Properly implement the FENCE instruction
+        Self::EnvTrap(EnvTrap::Exception(
+            DecodeError::Unimplemented("FENCE").into(),
+        ))
     }
 }
 

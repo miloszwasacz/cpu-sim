@@ -70,6 +70,8 @@ impl From<FetchError> for Exception {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecodeError {
     InvalidInstruction(RawInstr),
+    //TODO Remove when FENCE gets implemented
+    Unimplemented(&'static str),
 }
 
 impl fmt::Display for DecodeError {
@@ -78,6 +80,7 @@ impl fmt::Display for DecodeError {
             DecodeError::InvalidInstruction(instr) => {
                 write!(f, "{} is an invalid or unsupported instruction", instr)
             }
+            DecodeError::Unimplemented(instr) => write!(f, "`{}` is not implemented yet", instr),
         }
     }
 }

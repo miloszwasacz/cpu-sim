@@ -55,14 +55,16 @@ impl LoadQueue {
         let tag = entry.tag();
 
         // There can be no RAW hazards caused by preceding stores or traps
-        let raw_hazard = rob.preceding_stores(tag)
+        let raw_hazard = rob
+            .preceding_stores(tag)
             .map_ok(|store| entry.has_hazard(store))
             .any(|hazard| hazard.unwrap_or(true));
 
-        // The load cannot be speculative
+        // The load cannot be speculative (if fence)
+        #[allow(unused_variables)]
         let speculative = rob.is_entry_speculative(tag);
 
-        !raw_hazard && !speculative
+        !raw_hazard //&& !speculative
     }
 }
 
