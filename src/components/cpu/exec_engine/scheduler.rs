@@ -73,6 +73,7 @@ impl Scheduler {
         self.ops
     }
 
+    //TODO Take out the oldest ready
     /// Takes out the first ready instruction out of the scheduler.
     pub(super) fn take_first_ready(&mut self, rob: &ReorderBuffer) -> Option<RsEntry<Ready>> {
         self.entries.iter_mut().find_map(|rs| rs.take_if_ready(rob))

@@ -298,6 +298,7 @@ impl<I, O, E> Cpu<I, O, E> {
                     //TODO Technically, that is not true since loaded and stored data
                     //     might have different addresses but still overlap
 
+                    //TODO Make stores not rely on being commited in the correct order (use priority instead)
                     let value = unsafe { reg_lock.get(src) };
                     store(mem, addr, value);
                 }

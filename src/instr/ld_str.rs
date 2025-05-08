@@ -48,7 +48,7 @@ impl<T> Decode for Load<T> {
 impl<T: DataType> From<Load<T>> for Instruction {
     fn from(value: Load<T>) -> Self {
         let load = |mem: &mut L1D, addr: Address| {
-            let data: T = MemoryReadAccess::read(mem, addr);
+            let data: T = mem.read(addr);
             data.into()
         };
 
@@ -86,7 +86,7 @@ impl<T: DataType + Clone> From<Store<T>> for Instruction {
     fn from(value: Store<T>) -> Self {
         let store = |mem: &mut L1D, addr: Address, data: RegData| {
             let data: T = data.into();
-            mem.write(addr, data);
+            mem.write(addr, data)
         };
 
         Instruction::Store {

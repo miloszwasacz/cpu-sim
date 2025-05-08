@@ -13,6 +13,8 @@ mod indices;
 mod policies;
 mod traits;
 
+//TODO Add support for Inclusive & Exclusive caches
+
 //#region Cache
 
 //TODO Latencies
@@ -236,6 +238,7 @@ impl CacheLine {
         let len = size_of::<T>();
         let bytes = data.to_le_bytes();
         self.data[start..start + len].copy_from_slice(bytes.as_ref());
+        self.dirty = true;
     }
 }
 
