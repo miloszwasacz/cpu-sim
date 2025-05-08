@@ -99,6 +99,7 @@ impl StatefulComponent for Rob {
                                 Ready::Store { src, addr, .. } => {
                                     (format!("STORE  {:#}, {}", src, fmt_addr(addr)), READY_COLOR)
                                 }
+                                Ready::Fence => ("FENCE".to_string(), READY_COLOR),
                             },
                             Err(trap) => match trap {
                                 EnvTrap::Syscall => {

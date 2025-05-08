@@ -149,6 +149,10 @@ impl RobEntry<Ready> {
         Self(Err(trap), pc)
     }
 
+    pub fn fence(pc: Pc) -> Self {
+        Self(Ok(ReadyRobEntry::Fence), pc)
+    }
+
     pub fn data(&self) -> &Ready {
         &self.0
     }
@@ -268,6 +272,7 @@ pub enum ReadyRobEntry {
         /// The effective address.
         addr: Address,
     },
+    Fence,
 }
 
 //#endregion

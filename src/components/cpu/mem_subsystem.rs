@@ -60,11 +60,10 @@ impl LoadQueue {
             .map_ok(|store| entry.has_hazard(store))
             .any(|hazard| hazard.unwrap_or(true));
 
-        // The load cannot be speculative (if fence)
-        #[allow(unused_variables)]
-        let speculative = rob.is_entry_speculative(tag);
+        // The load cannot be behind a fence
+        let fenced = rob.is_entry_fenced(tag);
 
-        !raw_hazard //&& !speculative
+        !raw_hazard && !fenced
     }
 }
 

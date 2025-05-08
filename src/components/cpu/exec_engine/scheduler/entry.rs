@@ -263,7 +263,8 @@ impl RegValue {
                     }
                     ReadyRobEntry::Jump { .. }
                     | ReadyRobEntry::Branch { .. }
-                    | ReadyRobEntry::Store { .. } => {}
+                    | ReadyRobEntry::Store { .. }
+                    | ReadyRobEntry::Fence => {}
                 }
             }
         }

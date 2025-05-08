@@ -37,9 +37,10 @@ bitflags! {
 impl Instruction {
     pub(super) const fn ty(&self) -> OperationType {
         match self {
-            Instruction::Alu { .. } | Instruction::Jump { .. } | Instruction::EnvTrap(_) => {
-                OperationType::ALU
-            }
+            Instruction::Alu { .. }
+            | Instruction::Jump { .. }
+            | Instruction::EnvTrap(_)
+            | Instruction::Fence => OperationType::ALU,
             Instruction::Branch { .. } => OperationType::BRANCH,
             Instruction::Load { .. } => OperationType::LOAD,
             Instruction::Store { .. } => OperationType::STORE,
@@ -170,6 +171,15 @@ impl<I, O, E> Cpu<I, O, E> {
                     rob_entry_lock.issue_ready(rob_entry);
                     break;
                 }
+                Instruction::Fence => {
+                    // Fences require no execution, and therefore no reservation stations
+                    #[allow(clippy::drop_non_drop)]
+                    drop(rs_lock);
+
+                    let rob_entry = RobEntry::<rob::Ready>::fence(pc);
+                    rob_entry_lock.issue_ready(rob_entry);
+                    continue;
+                }
             };
             let rs_entry = RsEntry {
                 dest: rob_index,
@@ -295,13 +305,14 @@ impl<I, O, E> Cpu<I, O, E> {
                     // We don't have to model store latency since the result can
                     // be bypassed to any outstanding loads with no delay
 
-                    //TODO Technically, that is not true since loaded and stored data
-                    //     might have different addresses but still overlap
+                    //TODO Technically, that is not true since stores have latencies of their own
+                    //     (when those are implemented, make sure to take fences into account)
 
                     //TODO Make stores not rely on being commited in the correct order (use priority instead)
                     let value = unsafe { reg_lock.get(src) };
                     store(mem, addr, value);
                 }
+                ReadyRobEntry::Fence => {}
             }
         }
 

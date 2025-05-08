@@ -1,10 +1,9 @@
-use crate::components::cpu::error::DecodeError;
 use crate::components::cpu::reg::RegName;
 use crate::instr::decode::encoding::ITypeFormat;
 use crate::instr::decode::Decode;
 use crate::instr::display::display_width;
 use crate::instr::raw::RawInstr;
-use crate::instr::{EnvTrap, Immediate, Instruction};
+use crate::instr::{Immediate, Instruction};
 
 use std::fmt;
 
@@ -83,10 +82,7 @@ impl Decode for Fence {
 
 impl From<Fence> for Instruction {
     fn from(_value: Fence) -> Self {
-        //TODO Properly implement the FENCE instruction
-        Self::EnvTrap(EnvTrap::Exception(
-            DecodeError::Unimplemented("FENCE").into(),
-        ))
+        Self::Fence
     }
 }
 
@@ -115,7 +111,7 @@ impl fmt::Display for Fence {
                 let po = flag!(self.po, "o");
 
                 let sr = flag!(self.sr, "r");
-                let sw = flag!(self.sw, "r");
+                let sw = flag!(self.sw, "w");
                 let si = flag!(self.si, "i");
                 let so = flag!(self.so, "o");
 

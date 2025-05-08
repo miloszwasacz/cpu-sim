@@ -219,7 +219,8 @@ impl<I, O, E> Cpu<I, O, E> {
             Instruction::Alu { .. }
             | Instruction::Load { .. }
             | Instruction::Store { .. }
-            | Instruction::EnvTrap(_) => (pc_plus_4, pc_plus_4),
+            | Instruction::EnvTrap(_)
+            | Instruction::Fence => (pc_plus_4, pc_plus_4),
         };
 
         let decoded = Decoded {

@@ -81,7 +81,9 @@ impl ReorderBuffer {
                     link_data: value,
                     ..
                 } => future_file[*dest].write_result(result.tag, *value),
-                ReadyRobEntry::Branch { .. } | ReadyRobEntry::Store { .. } => {}
+                ReadyRobEntry::Branch { .. }
+                | ReadyRobEntry::Store { .. }
+                | ReadyRobEntry::Fence => {}
             });
             if new {
                 holder.write(RobEntryHolder::Ready(ready));
@@ -116,27 +118,13 @@ impl ReorderBuffer {
         })
     }
 
-    pub fn is_entry_speculative(&self, index: RobIndex) -> bool {
+    pub fn is_entry_fenced(&self, index: RobIndex) -> bool {
         let head = *self.head.read();
         Iter::new(self, head..index).any(|h| match h.read() {
-            RobEntryHolder::Empty => false,
-            RobEntryHolder::NotReady(entry) => match entry.data() {
-                NotReady::Jump { .. } | NotReady::Branch { .. } => true,
-                NotReady::Alu { .. } | NotReady::Load { .. } | NotReady::Store { .. } => false,
-            },
+            RobEntryHolder::Empty | RobEntryHolder::NotReady(_) => false,
             RobEntryHolder::Ready(entry) => entry
                 .data()
-                .map(|entry| match entry {
-                    ReadyRobEntry::Jump {
-                        predicted, target, ..
-                    } => predicted != target,
-                    ReadyRobEntry::Branch {
-                        predicted, taken, ..
-                    } => predicted != taken,
-                    ReadyRobEntry::Alu { .. }
-                    | ReadyRobEntry::Load { .. }
-                    | ReadyRobEntry::Store { .. } => false,
-                })
+                .map(|entry| matches!(entry, ReadyRobEntry::Fence))
                 .unwrap_or(true),
         })
     }

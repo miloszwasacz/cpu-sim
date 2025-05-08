@@ -63,6 +63,8 @@ pub enum Instruction {
         offset: Immediate,
     },
     EnvTrap(EnvTrap),
+    //TODO Improve fence granularity
+    Fence,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
