@@ -42,6 +42,18 @@ impl From<Funct7> for RawInstrBits {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Funct6(Bits<{ Funct6::LEN }>);
+impl Funct6 {
+    const LEN: u64 = 6;
+    const MSB: u64 = 31;
+}
+impl From<Funct6> for RawInstrBits {
+    fn from(value: Funct6) -> Self {
+        value.0.into()
+    }
+}
+
 pub(crate) const RS1_LEN: u64 = REG_LEN;
 pub(crate) const RS1_MSB: u64 = 19;
 
@@ -70,4 +82,8 @@ pub(crate) fn decode_rs2(instr: RawInstr) -> RegName {
 
 pub(crate) fn decode_funct7(instr: RawInstr) -> Funct7 {
     Funct7(instr.extract_bits::<{ Funct7::LEN }, { Funct7::MSB }>())
+}
+
+pub(crate) fn decode_funct6(instr: RawInstr) -> Funct6 {
+    Funct6(instr.extract_bits::<{ Funct6::LEN }, { Funct6::MSB }>())
 }

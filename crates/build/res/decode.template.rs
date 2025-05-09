@@ -6,7 +6,8 @@ pub fn decode(instr: RawInstr) -> Result<FullInstruction, RawInstr> {
     let opcode: RawInstrBits = decode_opcode(instr).into();
     let funct3: RawInstrBits = decode_funct3(instr).into();
     let funct7: RawInstrBits = decode_funct7(instr).into();
-    Ok(match (opcode, funct3, funct7) {
+    let funct6: RawInstrBits = decode_funct6(instr).into();
+    Ok(match (opcode, funct3, funct7, funct6) {
         #ENCODINGS!
         _ => return Err(instr),
     })

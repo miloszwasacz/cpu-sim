@@ -13,8 +13,9 @@ pub(super) trait MemoryRead {
 
 impl MemoryRead for Memory {
     fn read_line(&mut self, address: Address, line_len: usize) -> Box<[u8]> {
-        let start = (address & !BlockOffset::mask(line_len)) as usize;
-        self.0[start..start + line_len].to_vec().into_boxed_slice()
+        let mask = !BlockOffset::mask(line_len);
+        let start = (address & mask) as usize;
+        self.slice(start, line_len).to_vec().into_boxed_slice()
     }
 }
 
@@ -41,8 +42,9 @@ pub(super) trait MemoryWrite {
 impl MemoryWrite for Memory {
     fn write_line(&mut self, address: Address, line: Box<[u8]>) {
         let line_len = line.len();
-        let start = (address & !BlockOffset::mask(line_len)) as usize;
-        self.0[start..start + line_len].copy_from_slice(&line);
+        let mask = !BlockOffset::mask(line_len);
+        let start = (address & mask) as usize;
+        self.slice(start, line_len).copy_from_slice(&line);
     }
 }
 
@@ -130,7 +132,7 @@ impl MemoryWriteAccess for Memory {
         let start = address as usize;
         let len = size_of::<T>();
         let bytes = data.to_le_bytes();
-        self.0[start..start + len].copy_from_slice(bytes.as_ref());
+        self.slice(start, len).copy_from_slice(bytes.as_ref());
     }
 }
 
@@ -147,3 +149,13 @@ impl<T: MemoryWriteAccess> MemoryWriteAccess for Arc<Mutex<T>> {
 }
 
 //#endregion
+
+impl Memory {
+    fn slice(&mut self, start: usize, len: usize) -> &mut [u8] {
+        match start.overflowing_add(len) {
+            (end, false) => &mut self.0[start..end],
+            (0, true) => &mut self.0[start..],
+            (_, true) => panic!("attempting to add with overflow"),
+        }
+    }
+}

@@ -54,6 +54,7 @@ pub fn generate_decode(out_dir: &Path, instrs: &[Instr]) {
             opcode,
             funct3,
             funct7,
+            funct6,
         } = match instr.format {
             FormatType::Normal(format) => format,
             FormatType::Special(_) => unreachable!(),
@@ -73,6 +74,11 @@ pub fn generate_decode(out_dir: &Path, instrs: &[Instr]) {
             impl_file.write_all(b"0b").unwrap();
         }
         impl_file.write_all(funct7.as_bytes()).unwrap();
+        impl_file.write_all(b", ").unwrap();
+        if funct6 != "_" {
+            impl_file.write_all(b"0b").unwrap();
+        }
+        impl_file.write_all(funct6.as_bytes()).unwrap();
         impl_file.write_all(b") => FullInstruction::").unwrap();
         impl_file.write_all(instr.name.as_bytes()).unwrap();
         impl_file.write_all(b"(").unwrap();

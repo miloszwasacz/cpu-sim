@@ -60,10 +60,13 @@ mod instr_meta {
                     assert!(!funct3.trim().is_empty(), "FUNCT3 must not be empty");
                     let funct7 = next!(format, full_line);
                     assert!(!funct7.trim().is_empty(), "FUNCT7 must not be empty");
+                    let funct6 = next!(format, full_line);
+                    assert!(!funct6.trim().is_empty(), "FUNCT6 must not be empty");
                     FormatType::Normal(Format {
                         opcode,
                         funct3,
                         funct7,
+                        funct6,
                     })
                 }
                 None => FormatType::Special(opcode),
@@ -102,5 +105,6 @@ mod instr_meta {
         pub opcode: &'a str,
         pub funct3: &'a str,
         pub funct7: &'a str,
+        pub funct6: &'a str,
     }
 }

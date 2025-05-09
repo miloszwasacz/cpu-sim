@@ -6,10 +6,14 @@ instr_mod!(ori);
 instr_mod!(slti);
 instr_mod!(sltiu);
 instr_mod!(xori);
+instr_mod!(addiw);
 
 instr_mod!(slli);
 instr_mod!(srai);
 instr_mod!(srli);
+instr_mod!(slliw);
+instr_mod!(sraiw);
+instr_mod!(srliw);
 
 instr_mod!(auipc);
 instr_mod!(lui);
@@ -24,6 +28,11 @@ instr_mod!(sra);
 instr_mod!(srl);
 instr_mod!(sub);
 instr_mod!(xor);
+instr_mod!(addw);
+instr_mod!(sllw);
+instr_mod!(srlw);
+instr_mod!(subw);
+instr_mod!(sraw);
 
 macro_rules! int_comput_instr {
     ($name:ident, Reg, $alu_ctrl:ident) => {

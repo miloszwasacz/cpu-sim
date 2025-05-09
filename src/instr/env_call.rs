@@ -17,7 +17,7 @@ macro_rules! system_instr {
             fn decode(_raw: crate::instr::raw::RawInstr) -> Self {
                 #[cfg(debug_assertions)]
                 {
-                    assert_eq!(_raw.encoding(), Self::ENCODING);   
+                    assert_eq!(_raw.encoding(), Self::ENCODING);
                 }
                 Self(())
             }
@@ -89,7 +89,7 @@ impl TryFrom<RegData> for SyscallCode {
     type Error = SyscallConversionError;
 
     fn try_from(value: RegData) -> Result<Self, Self::Error> {
-        Self::try_from(value.i())
+        Self::try_from(value.i() as OsFnResult)
     }
 }
 

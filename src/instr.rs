@@ -26,7 +26,7 @@ pub mod raw;
 
 pub trait Instr: fmt::Debug + fmt::Display + Into<Instruction> {}
 
-pub type Immediate = i32;
+pub type Immediate = i64;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Instruction {

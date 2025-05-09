@@ -11,11 +11,14 @@ use std::marker::PhantomData;
 instr_mod!(lb);
 instr_mod!(lh);
 instr_mod!(lw);
+instr_mod!(ld);
 instr_mod!(lbu);
 instr_mod!(lhu);
+instr_mod!(lwu);
 instr_mod!(sb);
 instr_mod!(sh);
 instr_mod!(sw);
+instr_mod!(sd);
 
 macro_rules! load_store_instr {
     ($name:ident, $parent:ty) => {

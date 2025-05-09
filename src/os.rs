@@ -259,7 +259,7 @@ impl<I, O: Write, E: Write> Os<I, O, E> {
 }
 
 fn read_bytes<M: MemoryReadAccess>(mut mem: M, addr_range: Range<Address>) -> Vec<u8> {
-    let mut bytes = Vec::<u8>::with_capacity(addr_range.len());
+    let mut bytes = Vec::<u8>::with_capacity((addr_range.end - addr_range.start) as usize);
     for addr in addr_range {
         bytes.push(mem.read(addr))
     }

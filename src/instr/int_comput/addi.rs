@@ -10,6 +10,7 @@ use std::fmt;
 pub struct Addi(ITypeFormat);
 
 impl From<Addi> for Instruction {
+    //noinspection DuplicatedCode
     fn from(value: Addi) -> Self {
         Instruction::Alu {
             ctrl: AluControl::Add,

@@ -64,7 +64,7 @@ impl<const N: u64> Bits<N> {
 
     pub const fn zeros() -> Self {
         debug_assert!(
-            N < MAX_BITS,
+            N <= MAX_BITS,
             "{}",
             formatcp!("N cannot be larger than {}", MAX_BITS)
         );
@@ -74,7 +74,7 @@ impl<const N: u64> Bits<N> {
 
     pub const fn resize<const M: u64>(self) -> Bits<M> {
         debug_assert!(
-            M < MAX_BITS,
+            M <= MAX_BITS,
             "{}",
             formatcp!("M cannot be larger than {}", MAX_BITS)
         );
@@ -95,7 +95,7 @@ impl<const N: u64> Bits<N> {
 
     pub fn sign_extend<const M: u64>(self) -> Bits<M> {
         debug_assert!(
-            M < MAX_BITS,
+            M <= MAX_BITS,
             "{}",
             formatcp!("M cannot be larger than {}", MAX_BITS)
         );

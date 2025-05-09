@@ -10,7 +10,7 @@ mod convert;
 mod hierarchy;
 mod size;
 
-pub type Address = u32;
+pub type Address = u64;
 
 #[derive(Debug, Clone)]
 pub struct Memory(Box<[u8]>);

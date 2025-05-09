@@ -9,7 +9,7 @@ use self::front_end::{
 };
 use self::mem_subsystem::LoadQueue;
 use self::reg::pipeline::{BpRegs, IfRegs, ZbpRegs};
-use self::reg::{RegFile, RegName};
+use self::reg::{RegData, RegFile, RegName};
 use super::memory::{Address, MemHierarchy, MemSize, Memory};
 use crate::config::Immutable;
 use crate::instr::{EnvTrap, SyscallCode};
@@ -204,7 +204,7 @@ impl<I: Read, O: Write, E: Write> Cpu<I, O, E> {
                         $os.set_errno(&mut $mem, errno);
                         r
                     }
-                })
+                } as _)
             };
         }
 
@@ -216,40 +216,40 @@ impl<I: Read, O: Write, E: Write> Cpu<I, O, E> {
         match syscall {
             SyscallCode::Exit => self.exit = true,
             SyscallCode::Close => {
-                let fd = reg_file.get(RegName::A0).i();
+                let fd = reg_file.get(RegName::A0).i() as _;
                 let result = os_call!(os, mem, |os| os.close(fd));
                 reg_file.set(RegName::A0, result);
             }
             SyscallCode::Fstat => {
-                let fd = reg_file.get(RegName::A0).i();
+                let fd = reg_file.get(RegName::A0).i() as _;
                 let statbuf = reg_file.get(RegName::A1).addr();
                 let result = os_call!(os, mem, |os| os.fstat(&mut mem, fd, statbuf));
                 reg_file.set(RegName::A0, result);
             }
             SyscallCode::Lseek => {
-                let fd = reg_file.get(RegName::A0).i();
-                let offset = reg_file.get(RegName::A1).i();
-                let whence = reg_file.get(RegName::A2).i();
+                let fd = reg_file.get(RegName::A0).i() as _;
+                let offset = reg_file.get(RegName::A1).i() as _;
+                let whence = reg_file.get(RegName::A2).i() as _;
                 let result = os_call!(os, mem, |os| os.lseek(fd, offset, whence));
                 reg_file.set(RegName::A0, result);
             }
             SyscallCode::Read => {
-                let fd = reg_file.get(RegName::A0).i();
+                let fd = reg_file.get(RegName::A0).i() as _;
                 let buf = reg_file.get(RegName::A1).addr();
-                let count = reg_file.get(RegName::A2).u();
+                let count = reg_file.get(RegName::A2).u() as _;
                 let result = os_call!(os, mem, |os| os.read(&mut mem, fd, buf, count));
                 reg_file.set(RegName::A0, result);
             }
             SyscallCode::Sbrk => {
-                let incr = reg_file.get(RegName::A0).i();
+                let incr = reg_file.get(RegName::A0).i() as _;
                 let sp = reg_file.get(RegName::SP).addr();
                 let result = os_call!(os, mem, |os| os.sbrk(sp, incr));
                 reg_file.set(RegName::A0, result);
             }
             SyscallCode::Write => {
-                let fd = reg_file.get(RegName::A0).i();
+                let fd = reg_file.get(RegName::A0).i() as _;
                 let buf = reg_file.get(RegName::A1).addr();
-                let count = reg_file.get(RegName::A2).u();
+                let count = reg_file.get(RegName::A2).u() as _;
                 let result = os_call!(os, mem, |os| os.write(&mut mem, fd, buf, count));
                 reg_file.set(RegName::A0, result);
             }
@@ -266,8 +266,13 @@ impl<I, O, E> Cpu<I, O, E> {
         &mut self.os
     }
 
-    pub(crate) unsafe fn set_pc(&mut self, entrypoint: Address) {
-        self.pc = StallingFlipFlop::new(entrypoint);
+    pub(crate) unsafe fn init(&mut self, entrypoint: Address, sp: Address) {
+        self.pc.write(entrypoint);
+        self.regs.set(RegName::SP, RegData::address(sp));
+
+        self.pc.finish_cycle();
+        self.regs.future_file_mut().clear();
+        self.regs.finish_cycle();
     }
 
     pub fn reset(&mut self) {
@@ -330,7 +335,7 @@ impl<I, O, E> Cpu<I, O, E> {
     }
 
     fn get_exit_code(&self) -> ExitCode {
-        self.regs.get(RegName::A0).i()
+        self.regs.get(RegName::A0).i() as _
     }
 }
 

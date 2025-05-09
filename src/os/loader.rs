@@ -1,11 +1,13 @@
 use crate::components::cpu::Cpu;
-use crate::components::memory::{Address, Memory};
+use crate::components::memory::{Address, MemSize, Memory};
 
 use elf::endian::LittleEndian;
 use elf::ElfBytes;
 use std::error::Error;
 use std::path::Path;
 use std::{fmt, fs, io};
+
+const STACK_SIZE: usize = MemSize(1).GiB();
 
 pub struct Loader;
 
@@ -46,12 +48,17 @@ impl Loader {
             mem[addr..(addr + size as Address)].copy_from_slice(&bin[offset..(offset + size)])
         }
 
-        unsafe { cpu.set_pc(elf.ehdr.e_entry as Address) };
-        cpu.os()
-            .set_errno_addr(Self::get_symbol_addr(&elf, Self::ERRNO_PTR_NAME)?);
-        cpu.os().set__end_addr(
-            Self::get_symbol_addr(&elf, Self::_END_NAME)?.ok_or(LoaderError::Missing_End)?,
-        );
+        let errno_addr = Self::get_symbol_addr(&elf, Self::ERRNO_PTR_NAME)?;
+        let _end_addr =
+            Self::get_symbol_addr(&elf, Self::_END_NAME)?.ok_or(LoaderError::Missing_End)?;
+        unsafe {
+            cpu.init(
+                elf.ehdr.e_entry as Address,
+                _end_addr + STACK_SIZE as Address,
+            )
+        };
+        cpu.os().set_errno_addr(errno_addr);
+        cpu.os().set__end_addr(_end_addr);
 
         Ok(())
     }
