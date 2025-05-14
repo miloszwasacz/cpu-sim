@@ -28,20 +28,16 @@ impl ReservationStation {
     }
 }
 
-impl FlipFlop<ReservationStation> {
-    fn take_if_ready(&mut self, rob: &ReorderBuffer) -> Option<RsEntry<Ready>> {
-        match self.read() {
+impl ReservationStation {
+    fn ready(&self, rob: &ReorderBuffer) -> Option<&RsEntry<Ready>> {
+        match self {
             ReservationStation::Empty | ReservationStation::NotReady(_) => None,
             ReservationStation::Ready(entry) => match entry.data {
                 Ready::Load1 { .. } if rob.preceding_stores(entry.dest).next().is_some() => {
                     // First step of Load has to wait until there are no outstanding Stores
                     None
                 }
-                _ => {
-                    let entry = *entry;
-                    self.write(ReservationStation::Empty);
-                    Some(entry)
-                }
+                _ => Some(entry),
             },
         }
     }
@@ -73,10 +69,18 @@ impl Scheduler {
         self.ops
     }
 
-    //TODO Take out the oldest ready
-    /// Takes out the first ready instruction out of the scheduler.
-    pub(super) fn take_first_ready(&mut self, rob: &ReorderBuffer) -> Option<RsEntry<Ready>> {
-        self.entries.iter_mut().find_map(|rs| rs.take_if_ready(rob))
+    /// Takes out the oldest ready instruction out of the scheduler.
+    pub(super) fn take_oldest_ready(&mut self, rob: &ReorderBuffer) -> Option<RsEntry<Ready>> {
+        self.entries
+            .iter()
+            .enumerate()
+            .filter_map(|(i, rs)| rs.read().ready(rob).map(|e| (i, e)))
+            .min_by(|(_, a), (_, b)| a.dest.cmp(rob, &b.dest))
+            .map(|(i, e)| (i, *e))
+            .map(|(i, entry)| {
+                self.entries[i].write(ReservationStation::Empty);
+                entry
+            })
     }
 }
 

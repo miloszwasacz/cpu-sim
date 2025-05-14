@@ -210,7 +210,7 @@ impl<I, O, E> Cpu<I, O, E> {
             .zip(exec_units)
             .filter_map(|(scheduler, exec_unit)| {
                 scheduler
-                    .take_first_ready(rob)
+                    .take_oldest_ready(rob)
                     .filter(|entry| {
                         // Loads are restricted by the number of available spaces in the Load Queue
                         !entry.op_type.contains(OperationType::LOAD)

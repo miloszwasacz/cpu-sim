@@ -1,7 +1,9 @@
 use super::{Item, ReorderBuffer};
+
+use std::cmp::Ordering;
 use std::fmt;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct RobIndex(usize);
 
 impl RobIndex {
@@ -29,6 +31,19 @@ impl RobIndex {
     #[inline(always)]
     pub(super) fn add(self, rob: &ReorderBuffer, rhs: usize) -> Self {
         Self(self.0.wrapping_add(rhs) % rob.capacity())
+    }
+
+    pub fn cmp(&self, rob: &ReorderBuffer, rhs: &RobIndex) -> Ordering {
+        let head = rob.head.read();
+        let lb = self.0 >= head.0; // `self` is right of `head`
+        let rb = rhs.0 >= head.0; // `rhs` is right of `head`
+        if lb && !rb {
+            Ordering::Less
+        } else if !lb && rb {
+            Ordering::Greater
+        } else {
+            self.0.cmp(&rhs.0)
+        }
     }
 }
 
