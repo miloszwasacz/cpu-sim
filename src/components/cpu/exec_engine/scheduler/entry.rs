@@ -2,7 +2,7 @@ use crate::components::cpu::exec_engine::exec_unit::{ExecResult, ExecResultData}
 use crate::components::cpu::exec_engine::rob::{ReadyRobEntry, RobIndex};
 use crate::components::cpu::exec_engine::{CommonDataBus, OperationType, ReorderBuffer};
 use crate::components::cpu::reg::{FutureFileIssueLock as FutureFile, RegData, RegName};
-use crate::components::cpu::{AluControl, Pc};
+use crate::components::cpu::{AluControl, MulControl, Pc};
 use crate::instr::mem_access::MemRead;
 use crate::instr::{AluSrcB, Branch, Immediate};
 
@@ -26,7 +26,9 @@ impl RsEntry<NotReady> {
         cdb: &CommonDataBus,
     ) -> Result<RsEntry<Ready>, RsEntry<NotReady>> {
         match &mut self.data {
-            NotReady::Alu { src1, src2, .. } | NotReady::Branch { src1, src2, .. } => {
+            NotReady::Alu { src1, src2, .. }
+            | NotReady::Mul { src1, src2, .. }
+            | NotReady::Branch { src1, src2, .. } => {
                 src1.update_from_rob(rob);
                 src2.update_from_rob(rob);
             }
@@ -55,7 +57,9 @@ impl RsEntry<NotReady> {
 
         for (tag, value) in results {
             match &mut self.data {
-                NotReady::Alu { src1, src2, .. } | NotReady::Branch { src1, src2, .. } => {
+                NotReady::Alu { src1, src2, .. }
+                | NotReady::Mul { src1, src2, .. }
+                | NotReady::Branch { src1, src2, .. } => {
                     src1.update_from_cdb(tag, value);
                     src2.update_from_cdb(tag, value);
                 }
@@ -80,6 +84,11 @@ impl TryFrom<RsEntry<NotReady>> for RsEntry<Ready> {
                 src1: RegValue::Value(src1),
                 src2: RegValue::Value(src2),
             } => Ready::Alu { ctrl, src1, src2 },
+            NotReady::Mul {
+                ctrl,
+                src1: RegValue::Value(src1),
+                src2: RegValue::Value(src2),
+            } => Ready::Mul { ctrl, src1, src2 },
             NotReady::Jump {
                 base: RegValue::Value(base),
                 offset,
@@ -142,6 +151,12 @@ pub enum RsEntryData<V: RsEntrySrc> {
         src1: V,
         src2: V,
     },
+    Mul {
+        /// The control signal specifying which MUL operation should be performed.
+        ctrl: MulControl,
+        src1: V,
+        src2: V,
+    },
     Jump {
         base: V, // From Regs or <PC supplied on issue>
         offset: Immediate,
@@ -182,6 +197,17 @@ impl NotReady {
             AluSrcB::Imm(src2) => RegValue::Value(RegData::signed(src2)),
         };
         Self::Alu { ctrl, src1, src2 }
+    }
+
+    pub(in crate::components::cpu::exec_engine) fn mul(
+        ctrl: MulControl,
+        src1: RegName,
+        src2: RegName,
+        future_file: &FutureFile,
+    ) -> Self {
+        let src1 = RegValue::new(src1, future_file);
+        let src2 = RegValue::new(src2, future_file);
+        Self::Mul { ctrl, src1, src2 }
     }
 
     // PC-based jumps don't need RS

@@ -26,6 +26,25 @@ impl StatefulComponent for Scheduler {
         };
         self.render_scrolling(model.ops.join("/"), model, area, buf, |entries| {
             entries.enumerate().map(|(i, entry)| {
+                macro_rules! alu_not_ready_line {
+                    ($line:expr, $ctrl:expr, $src1:expr, $src2:expr) => {
+                        let get_value = |reg_value| {
+                            let (text, color) = match reg_value {
+                                RegValue::Rob(index) => (format!("#{}", index), NOT_READY_COLOR),
+                                RegValue::Value(value) => (value.i().to_string(), READY_COLOR),
+                            };
+                            Span::from(format!("{:>5}", text)).fg(color)
+                        };
+
+                        let src1 = get_value($src1);
+                        let src2 = get_value($src2);
+                        $line += src1;
+                        $line += "  ".into();
+                        $line += src2;
+                        $line += Span::from(format!(", {:?}", $ctrl)).fg(NOT_READY_COLOR);
+                    };
+                }
+
                 let mut line = Line::from(format!("{:>2}: ", i));
                 match entry {
                     SchedulerEntrySnapshot::Empty => {}
@@ -34,24 +53,10 @@ impl StatefulComponent for Scheduler {
                             .fg(NOT_READY_COLOR);
                         match entry.data {
                             NotReady::Alu { ctrl, src1, src2 } => {
-                                let get_value = |reg_value| {
-                                    let (text, color) = match reg_value {
-                                        RegValue::Rob(index) => {
-                                            (format!("#{}", index), NOT_READY_COLOR)
-                                        }
-                                        RegValue::Value(value) => {
-                                            (value.i().to_string(), READY_COLOR)
-                                        }
-                                    };
-                                    Span::from(format!("{:>5}", text)).fg(color)
-                                };
-
-                                let src1 = get_value(src1);
-                                let src2 = get_value(src2);
-                                line += src1;
-                                line += "  ".into();
-                                line += src2;
-                                line += Span::from(format!(", {:?}", ctrl)).fg(NOT_READY_COLOR);
+                                alu_not_ready_line!(line, ctrl, src1, src2);
+                            }
+                            NotReady::Mul { ctrl, src1, src2 } => {
+                                alu_not_ready_line!(line, ctrl, src1, src2);
                             }
                             NotReady::Branch { ctrl, src1, src2 } => {
                                 let get_value = |reg_value| {
@@ -102,6 +107,9 @@ impl StatefulComponent for Scheduler {
                             format!("#{}", entry.dest),
                             match entry.data {
                                 Ready::Alu { ctrl, src1, src2 } => {
+                                    format!("{:>5}  {:>5}, {:?}", src1.i(), src2.i(), ctrl)
+                                }
+                                Ready::Mul { ctrl, src1, src2 } => {
                                     format!("{:>5}  {:>5}, {:?}", src1.i(), src2.i(), ctrl)
                                 }
                                 Ready::Branch { ctrl, src1, src2 } => match ctrl {

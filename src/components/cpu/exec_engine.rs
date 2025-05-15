@@ -28,9 +28,10 @@ bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub(super) struct OperationType: u8 {
         const ALU = 1;
-        const BRANCH = 1 << 1;
-        const STORE = 1 << 2;
-        const LOAD = 1 << 3;
+        const MUL = 1 << 1;
+        const BRANCH = 1 << 2;
+        const STORE = 1 << 3;
+        const LOAD = 1 << 4;
     }
 }
 
@@ -41,6 +42,7 @@ impl Instruction {
             | Instruction::Jump { .. }
             | Instruction::EnvTrap(_)
             | Instruction::Fence => OperationType::ALU,
+            Instruction::Mul { .. } => OperationType::MUL,
             Instruction::Branch { .. } => OperationType::BRANCH,
             Instruction::Load { .. } => OperationType::LOAD,
             Instruction::Store { .. } => OperationType::STORE,
@@ -100,6 +102,16 @@ impl<I, O, E> Cpu<I, O, E> {
 
                     let rob_entry = RobEntry::alu(pc, dest);
                     let rs_entry_data = rs::NotReady::alu(ctrl, src1, src2, &future_file_lock);
+                    (rob_entry, rs_entry_data, Some(dest))
+                }
+                Instruction::Mul {
+                    ctrl,
+                    src1,
+                    src2,
+                    dest,
+                } => {
+                    let rob_entry = RobEntry::alu(pc, dest);
+                    let rs_entry_data = rs::NotReady::mul(ctrl, src1, src2, &future_file_lock);
                     (rob_entry, rs_entry_data, Some(dest))
                 }
                 Instruction::Jump {
@@ -209,17 +221,21 @@ impl<I, O, E> Cpu<I, O, E> {
         let (results, load1_results) = schedulers
             .zip(exec_units)
             .filter_map(|(scheduler, exec_unit)| {
-                scheduler
-                    .take_oldest_ready(rob)
-                    .filter(|entry| {
-                        // Loads are restricted by the number of available spaces in the Load Queue
-                        !entry.op_type.contains(OperationType::LOAD)
-                            || available_loads
-                                .checked_sub(1)
-                                .inspect(|new| available_loads = *new)
-                                .is_some()
-                    })
-                    .map(|instr| exec_unit.process(instr))
+                if exec_unit.is_idle() {
+                    scheduler
+                        .take_oldest_ready(rob)
+                        .filter(|entry| {
+                            // Loads are restricted by the number of available spaces in the Load Queue
+                            !entry.op_type.contains(OperationType::LOAD)
+                                || available_loads
+                                    .checked_sub(1)
+                                    .inspect(|new| available_loads = *new)
+                                    .is_some()
+                        })
+                        .and_then(|instr| exec_unit.process_new(instr))
+                } else {
+                    exec_unit.process_running()
+                }
             })
             .chain(load_queue.execute(rob, mem))
             .partition_map(|result| match result.result {

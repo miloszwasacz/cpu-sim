@@ -1,5 +1,6 @@
 use self::diagnostics::CpuStats;
 pub use self::exec_engine::exec_unit::alu::AluControl;
+pub use self::exec_engine::exec_unit::mul::MulControl;
 use self::exec_engine::{
     CommonDataBus, ExecUnit, OperationType, ReorderBuffer, RobIndex, Scheduler, Schedulers,
 };
@@ -41,7 +42,7 @@ const SCHEDULER_CAPACITY: NonZeroUsize = NonZeroUsize::new(16).unwrap();
 const LOAD_QUEUE_CAPACITY: NonZeroUsize = NonZeroUsize::new(20).unwrap();
 const EXEC_UNITS: [OperationType; 5] = [
     OperationType::ALU,
-    OperationType::ALU,
+    OperationType::ALU.union(OperationType::MUL),
     OperationType::BRANCH,
     OperationType::LOAD,
     OperationType::STORE,
@@ -329,6 +330,9 @@ impl<I, O, E> Cpu<I, O, E> {
         self.decode_queue.clear();
         self.rob.clear();
         self.schedulers.clear();
+        for exec_unit in &mut self.exec_units {
+            exec_unit.clear();
+        }
         self.regs.future_file_mut().clear();
         self.cdb.clear();
         self.load_queue.clear();
@@ -350,6 +354,9 @@ impl<I, O, E> Sequential for Cpu<I, O, E> {
         self.decode_queue.finish_cycle();
         self.rob.finish_cycle();
         self.schedulers.finish_cycle();
+        for exec_unit in &mut self.exec_units {
+            exec_unit.finish_cycle();
+        }
         self.regs.finish_cycle();
         self.cdb.finish_cycle();
         self.load_queue.finish_cycle();

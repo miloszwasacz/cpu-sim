@@ -1,7 +1,7 @@
 CC = riscv64-unknown-elf-gcc
 CXX = riscv64-unknown-elf-g++
-CFLAGS = -mabi=lp64 -march=rv64i
-CXXFLAGS = -mabi=lp64 -march=rv64i
+CFLAGS = -mabi=lp64 -march=rv64im
+CXXFLAGS = -mabi=lp64 -march=rv64im
 
 
 SRC_DIR = ./src

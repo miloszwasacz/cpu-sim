@@ -217,6 +217,7 @@ impl<I, O, E> Cpu<I, O, E> {
                 (predicted, target)
             }
             Instruction::Alu { .. }
+            | Instruction::Mul { .. }
             | Instruction::Load { .. }
             | Instruction::Store { .. }
             | Instruction::EnvTrap(_)

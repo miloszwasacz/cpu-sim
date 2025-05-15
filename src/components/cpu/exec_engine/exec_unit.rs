@@ -1,45 +1,58 @@
 use self::agu::Agu;
 use self::alu::Alu;
 use self::branch::BranchUnit;
+use self::mul::Mul;
 use super::rob::RobIndex;
 use super::scheduler::{Ready, RsEntry, Scheduler};
 #[cfg(debug_assertions)]
 use super::OperationType;
 use super::Schedulers;
 use crate::components::cpu::error::Exception;
+use crate::components::cpu::flip_flop::{Clearable, FlipFlop, Sequential};
 use crate::components::cpu::reg::RegData;
 use crate::components::memory::Address;
 use crate::instr::mem_access::MemRead;
 
+use std::num::NonZeroUsize;
+
 pub mod agu;
 pub mod alu;
 pub mod branch;
+pub mod mul;
 
 //#region ExecUnit
 
-#[cfg(debug_assertions)]
+#[derive(Debug, Clone, Copy, Default)]
+enum Execution {
+    #[default]
+    Idle,
+    Executing {
+        result: ExecResult,
+        cycles: NonZeroLatency,
+    },
+}
+
 pub struct ExecUnit {
+    executing: FlipFlop<Execution>,
+    #[cfg(debug_assertions)]
     ops: OperationType,
 }
 
-#[cfg(not(debug_assertions))]
-pub struct ExecUnit(());
-
 impl ExecUnit {
-    #[inline]
     fn new(_scheduler: &Scheduler) -> Self {
-        #[cfg(debug_assertions)]
-        {
-            let ops = _scheduler.supported_ops();
-            Self { ops }
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            Self(())
+        Self {
+            executing: FlipFlop::new(Execution::Idle),
+            #[cfg(debug_assertions)]
+            ops: _scheduler.supported_ops(),
         }
     }
 
-    pub fn process(&mut self, instr: RsEntry<Ready>) -> ExecResult {
+    pub fn is_idle(&self) -> bool {
+        matches!(self.executing.read(), Execution::Idle)
+    }
+
+    //TODO Add link to `is_idle` in the docs
+    pub fn process_new(&mut self, instr: RsEntry<Ready>) -> Option<ExecResult> {
         #[cfg(debug_assertions)]
         {
             assert!(
@@ -48,11 +61,45 @@ impl ExecUnit {
                 self.ops,
                 instr.op_type
             );
+            assert!(
+                matches!(self.executing.read(), Execution::Idle),
+                "another instruction already executing"
+            );
         }
 
-        ExecResult {
+        let (data, cycles) = ExecResultData::from(instr.data);
+        let result = ExecResult {
             tag: instr.dest,
-            result: instr.data.try_into(),
+            result: Ok(data),
+        };
+        self.update_executing(result, cycles)
+    }
+
+    //TODO Add link to `is_idle` in the docs
+    pub fn process_running(&mut self) -> Option<ExecResult> {
+        let (result, cycles) = match *self.executing.read() {
+            Execution::Executing { result, cycles } => (result, cycles),
+            Execution::Idle => panic!("no instruction executing"),
+        };
+        self.update_executing(result, cycles)
+    }
+
+    fn update_executing(
+        &mut self,
+        result: ExecResult,
+        cycles: NonZeroLatency,
+    ) -> Option<ExecResult> {
+        let new_cycles: Latency = cycles.get() - 1;
+        match NonZeroLatency::new(new_cycles) {
+            None => {
+                self.executing.write(Execution::Idle);
+                Some(result)
+            }
+            Some(cycles) => {
+                let execution = Execution::Executing { result, cycles };
+                self.executing.write(execution);
+                None
+            }
         }
     }
 }
@@ -60,6 +107,18 @@ impl ExecUnit {
 impl From<&Schedulers> for Vec<ExecUnit> {
     fn from(value: &Schedulers) -> Self {
         value.iter().map(ExecUnit::new).collect()
+    }
+}
+
+impl Sequential for ExecUnit {
+    fn finish_cycle(&mut self) {
+        self.executing.finish_cycle();
+    }
+}
+
+impl Clearable for ExecUnit {
+    fn clear(&mut self) {
+        self.executing.clear();
     }
 }
 
@@ -89,6 +148,11 @@ impl ExecResult {
 
 //#region ExecResultData
 
+type Latency = usize;
+type NonZeroLatency = NonZeroUsize;
+
+const DEFAULT_LATENCY: NonZeroLatency = NonZeroLatency::new(1 as Latency).unwrap();
+
 #[derive(Debug, Clone, Copy)]
 pub enum ExecResultData {
     Alu(RegData),
@@ -108,16 +172,16 @@ pub enum ExecResultData {
     Store(Address),
 }
 
-impl TryFrom<Ready> for ExecResultData {
-    type Error = Exception;
-
-    fn try_from(value: Ready) -> Result<Self, Self::Error> {
-        //TODO Exceptions
-
-        Ok(match value {
+impl ExecResultData {
+    fn from(value: Ready) -> (Self, NonZeroLatency) {
+        let data = match value {
             Ready::Alu { ctrl, src1, src2 } => {
                 let result = Alu.process(ctrl, src1, src2);
                 Self::Alu(result)
+            }
+            Ready::Mul { ctrl, src1, src2 } => {
+                let (result, latency) = Mul.process(ctrl, src1, src2);
+                return (Self::Alu(result), latency);
             }
             Ready::Jump {
                 base,
@@ -148,7 +212,8 @@ impl TryFrom<Ready> for ExecResultData {
                 let result = Agu.addr(base, offset);
                 Self::Store(result)
             }
-        })
+        };
+        (data, DEFAULT_LATENCY)
     }
 }
 

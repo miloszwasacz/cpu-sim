@@ -1,7 +1,7 @@
 use self::mem_access::{MemRead, MemWrite};
 use crate::components::cpu::error::Exception;
 use crate::components::cpu::reg::{RegData, RegName};
-use crate::components::cpu::AluControl;
+use crate::components::cpu::{AluControl, MulControl};
 
 use std::fmt;
 
@@ -18,6 +18,7 @@ instr_mod!(env_call);
 instr_mod!(int_comput);
 instr_mod!(ld_str);
 instr_mod!(mem_ord);
+instr_mod!(m_ext);
 
 pub mod decode;
 pub(crate) mod full;
@@ -34,6 +35,12 @@ pub enum Instruction {
         ctrl: AluControl,
         src1: AluSrcA,
         src2: AluSrcB,
+        dest: RegName,
+    },
+    Mul {
+        ctrl: MulControl,
+        src1: RegName,
+        src2: RegName,
         dest: RegName,
     },
     Jump {
