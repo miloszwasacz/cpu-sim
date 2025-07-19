@@ -132,6 +132,16 @@ impl<const N: u64> Bits<N> {
 
         Self { value, ..self }
     }
+
+    #[inline(always)]
+    pub const fn as_u64(self) -> u64 {
+        self.value
+    }
+
+    #[inline(always)]
+    pub const fn as_u32(self) -> u32 {
+        self.as_u64() as _
+    }
 }
 
 impl<const N: u64> fmt::Display for Bits<N> {
@@ -270,13 +280,13 @@ impl<const N: u64> Shr<u32> for Bits<N> {
 
 impl<const N: u64> From<Bits<N>> for u32 {
     fn from(bits: Bits<N>) -> Self {
-        bits.value as u32
+        bits.as_u32()
     }
 }
 
 impl<const N: u64> From<Bits<N>> for u64 {
     fn from(bits: Bits<N>) -> Self {
-        bits.value
+        bits.as_u64()
     }
 }
 

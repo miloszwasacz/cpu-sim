@@ -1,5 +1,5 @@
 pub(super) use self::entry::{NotReady, Ready, ReadyRobEntry, RobEntry};
-use self::flip_flop::{RobLenFlipFlop, RobTrapFlipFlop};
+use self::flip_flop::RobLenFlipFlop;
 pub use self::index::RobIndex;
 use self::iter::Iter;
 pub(super) use self::lock::RobLock;
@@ -35,7 +35,6 @@ pub struct ReorderBuffer {
     buffer: Box<[FlipFlop<RobEntryHolder>]>,
     head: FlipFlop<RobIndex>,
     len: RobLenFlipFlop,
-    has_trap: RobTrapFlipFlop,
 }
 
 impl ReorderBuffer {
@@ -45,7 +44,6 @@ impl ReorderBuffer {
             buffer: buffer.into_boxed_slice(),
             head: FlipFlop::new(Default::default()),
             len: Default::default(),
-            has_trap: Default::default(),
         }
     }
 
@@ -144,7 +142,6 @@ impl Sequential for ReorderBuffer {
         }
         self.head.finish_cycle();
         self.len.finish_cycle();
-        self.has_trap.finish_cycle();
     }
 }
 
@@ -155,7 +152,6 @@ impl Clearable for ReorderBuffer {
         }
         self.head.clear();
         self.len.clear();
-        self.has_trap.clear();
     }
 }
 

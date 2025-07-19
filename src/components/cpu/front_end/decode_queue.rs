@@ -42,7 +42,7 @@ impl DecodeQueue {
     }
 
     pub(in crate::components::cpu) fn pop(&mut self) -> DecodeQueueLock {
-        debug_assert!(self.popped == 0);
+        debug_assert_eq!(self.popped, 0);
         DecodeQueueLock::new(self)
     }
 }

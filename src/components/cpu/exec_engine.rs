@@ -53,7 +53,13 @@ impl Instruction {
 //#endregion
 
 impl<I, O, E> Cpu<I, O, E> {
+    #[allow(clippy::drop_non_drop)]
     pub(super) fn issue(&mut self) {
+        if *self.serializing.read() {
+            // Stall if there is an in-flight serializing instruction
+            return;
+        }
+
         let mut decoded = self.decode_queue.pop();
         let mut rob_lock = self.rob.lock();
         let mut future_file_lock = self.regs.future_file_mut().issue_lock();
@@ -126,9 +132,12 @@ impl<I, O, E> Cpu<I, O, E> {
                         rs::NotReady::jump(base, offset, apply_mask, &future_file_lock);
                     (rob_entry, rs_entry_data, Some(link_reg))
                 }
-                Instruction::Jump { link_reg, .. } => {
+                Instruction::Jump {
+                    base: AluSrcA::Pc,
+                    link_reg,
+                    ..
+                } => {
                     // PC-based jumps require no execution, and therefore no reservation stations
-                    #[allow(clippy::drop_non_drop)]
                     drop(rs_lock);
 
                     debug_assert_eq!(predicted, target);
@@ -176,16 +185,15 @@ impl<I, O, E> Cpu<I, O, E> {
                 }
                 Instruction::EnvTrap(trap) => {
                     // Trap instructions require no execution, and therefore no reservation stations
-                    #[allow(clippy::drop_non_drop)]
                     drop(rs_lock);
 
                     let rob_entry = RobEntry::<rob::Ready>::env_trap(pc, trap);
                     rob_entry_lock.issue_ready(rob_entry);
+                    self.serializing.write(true);
                     break;
                 }
                 Instruction::Fence => {
                     // Fences require no execution, and therefore no reservation stations
-                    #[allow(clippy::drop_non_drop)]
                     drop(rs_lock);
 
                     let rob_entry = RobEntry::<rob::Ready>::fence(pc);
@@ -275,6 +283,7 @@ impl<I, O, E> Cpu<I, O, E> {
             let data = match *entry.data() {
                 Ok(data) => data,
                 Err(trap) => {
+                    self.serializing.write(false);
                     self.cycle_result.traps.push(trap);
                     return None;
                 }

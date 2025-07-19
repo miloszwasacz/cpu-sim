@@ -3,19 +3,10 @@ use super::{NotReady, Ready, ReorderBuffer, RobEntry, RobEntryHolder, RobIndex};
 use std::mem;
 use std::ops::Deref;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-enum TrapState {
-    #[default]
-    None,
-    Popped,
-    Pushed,
-}
-
 pub(in crate::components::cpu::exec_engine) struct RobLock<'a> {
     rob: &'a mut ReorderBuffer,
     issued: Vec<(RobIndex, RobEntryHolder)>,
     committed: Vec<RobIndex>,
-    trap_state: TrapState,
 }
 
 //TODO Add a note mentioning that the destructor has to run to properly issue the instructions
@@ -25,7 +16,6 @@ impl<'a> RobLock<'a> {
             rob,
             issued: Vec::new(),
             committed: Vec::new(),
-            trap_state: Default::default(),
         }
     }
 
@@ -36,9 +26,6 @@ impl<'a> RobLock<'a> {
             self.committed.is_empty(),
             "cannot issue and commit with the same lock"
         );
-        if self.rob.has_trap.read() {
-            return None;
-        }
 
         RobIndex::new(self.rob, self.issued.len()).map(|i| RobEntryLock(self, i))
     }
@@ -52,10 +39,6 @@ impl<'a> RobLock<'a> {
         match self.rob.get_mut(head).read() {
             RobEntryHolder::Empty | RobEntryHolder::NotReady(_) => None,
             RobEntryHolder::Ready(entry) => {
-                if entry.data().is_err() {
-                    debug_assert!(matches!(self.trap_state, TrapState::None));
-                    self.trap_state = TrapState::Popped;
-                }
                 self.committed.push(head);
                 Some(*entry)
             }
@@ -92,12 +75,6 @@ impl Drop for RobLock<'_> {
                 self.rob.get_mut(index).write(RobEntryHolder::Empty);
             }
         }
-
-        match self.trap_state {
-            TrapState::Popped => self.rob.has_trap.pop(),
-            TrapState::Pushed => self.rob.has_trap.push(),
-            TrapState::None => {}
-        }
     }
 }
 
@@ -118,10 +95,6 @@ impl RobEntryLock<'_, '_> {
 
     pub fn issue_ready(self, entry: RobEntry<Ready>) {
         let Self(lock, index) = self;
-        if entry.data().is_err() {
-            debug_assert!(matches!(lock.trap_state, TrapState::None));
-            lock.trap_state = TrapState::Pushed;
-        }
         lock.issued.push((index, RobEntryHolder::Ready(entry)));
     }
 }

@@ -4,7 +4,7 @@ pub use self::exec_engine::exec_unit::mul::MulControl;
 use self::exec_engine::{
     CommonDataBus, ExecUnit, OperationType, ReorderBuffer, RobIndex, Scheduler, Schedulers,
 };
-use self::flip_flop::{Clearable, Sequential, StallingFlipFlop};
+use self::flip_flop::{Clearable, FlipFlop, Sequential, StallingFlipFlop};
 use self::front_end::{
     BranchPredictor, DecodeQueue, Decoder, JumpAgu, PcAdder, ZeroBubblePredictor,
 };
@@ -81,6 +81,7 @@ pub struct Cpu<I, O, E> {
     // Execution Engine
     issue_width: Immutable<NonZeroUsize>,
     commit_width: Immutable<NonZeroUsize>,
+    serializing: FlipFlop<bool>,
     rob: ReorderBuffer,
     schedulers: Schedulers,
     regs: RegFile,
@@ -123,6 +124,7 @@ impl<I: Read, O: Write, E: Write> Cpu<I, O, E> {
 
             issue_width: ISSUE_WIDTH,
             commit_width: COMMIT_WIDTH,
+            serializing: FlipFlop::new(Default::default()),
             rob: ReorderBuffer::with_capacity(ROB_CAPACITY),
             schedulers,
             regs: Default::default(),
@@ -328,6 +330,7 @@ impl<I, O, E> Cpu<I, O, E> {
         self.if_regs.clear();
         self.bp_regs.clear();
         self.decode_queue.clear();
+        self.serializing.clear();
         self.rob.clear();
         self.schedulers.clear();
         for exec_unit in &mut self.exec_units {
@@ -352,6 +355,7 @@ impl<I, O, E> Sequential for Cpu<I, O, E> {
         self.branch_predictor.finish_cycle();
         self.bp_regs.finish_cycle();
         self.decode_queue.finish_cycle();
+        self.serializing.finish_cycle();
         self.rob.finish_cycle();
         self.schedulers.finish_cycle();
         for exec_unit in &mut self.exec_units {

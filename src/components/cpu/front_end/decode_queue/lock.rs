@@ -28,7 +28,7 @@ impl<'a> DecodeQueueLock<'a> {
 
 impl Drop for DecodeQueueLock<'_> {
     fn drop(&mut self) {
-        debug_assert!(self.queue.popped == 0);
+        debug_assert_eq!(self.queue.popped, 0);
         self.queue.popped = self.n;
     }
 }
