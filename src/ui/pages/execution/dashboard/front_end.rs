@@ -80,7 +80,7 @@ impl Component for FrontEnd {
             Line::from(vec![Span::from(header).bold(), Span::from(contents)])
         };
         let pc_line = make_line("PC", fmt_addr(model.pc()));
-        let clock_cycle_line = make_line("Clock cycle", stats.clock_cycle.to_string());
+        let clock_cycle_line = make_line("Clock cycle", stats.cycle.to_string());
         let ipc_line = make_line("IPC", format!("{:.5}", stats.ipc()));
         Text::from(vec![pc_line, Line::default(), clock_cycle_line, ipc_line])
             .render(pc_block.inner(pc_area), buf);

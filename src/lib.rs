@@ -1,12 +1,24 @@
 pub mod components;
+pub mod config;
 pub mod instr;
 pub mod os;
-pub mod config;
+
+/// Creates a new module with the given name and re-exports everything from it;
+macro_rules! export_mod {
+    ($name:ident) => {
+        pub use self::$name::*;
+        mod $name;
+    };
+}
+use export_mod;
 
 /// Includes a file generated during build.
 macro_rules! include_generated {
     ($file:literal) => {
         include!(concat!(env!("OUT_DIR"), "/", $file));
+    };
+    ($file:literal as expr) => {
+        include!(concat!(env!("OUT_DIR"), "/", $file))
     };
 }
 use include_generated;

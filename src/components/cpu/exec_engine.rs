@@ -6,12 +6,13 @@ pub use self::scheduler::{Scheduler, Schedulers};
 use self::exec_unit::ExecResultData;
 use self::rob::{ReadyRobEntry, RobEntry};
 use self::scheduler::{self as rs, RsEntry};
+use super::csr::{CsrAccessResult, CsrAddr};
 use super::front_end::decode_queue::Decoded;
 use super::mem_subsystem::LoadQueueEntry;
 use super::reg::RegData;
 use super::Cpu;
 use crate::components::memory::Address;
-use crate::instr::{AluSrcA, Instruction};
+use crate::instr::{AluSrcA, CsrSrc, EnvTrap, Instruction};
 
 use bitflags::bitflags;
 use itertools::{Either, Itertools};
@@ -32,20 +33,21 @@ bitflags! {
         const BRANCH = 1 << 2;
         const STORE = 1 << 3;
         const LOAD = 1 << 4;
+        const NONE = 0;
     }
 }
 
 impl Instruction {
     pub(super) const fn ty(&self) -> OperationType {
         match self {
-            Instruction::Alu { .. }
-            | Instruction::Jump { .. }
-            | Instruction::EnvTrap(_)
-            | Instruction::Fence => OperationType::ALU,
+            Instruction::Alu { .. } | Instruction::Jump { .. } => OperationType::ALU,
             Instruction::Mul { .. } => OperationType::MUL,
             Instruction::Branch { .. } => OperationType::BRANCH,
             Instruction::Load { .. } => OperationType::LOAD,
             Instruction::Store { .. } => OperationType::STORE,
+            Instruction::EnvTrap(_) | Instruction::Fence | Instruction::Csr { .. } => {
+                OperationType::NONE
+            }
         }
     }
 }
@@ -200,6 +202,20 @@ impl<I, O, E> Cpu<I, O, E> {
                     rob_entry_lock.issue_ready(rob_entry);
                     continue;
                 }
+                Instruction::Csr {
+                    ctrl,
+                    csr,
+                    src,
+                    dest,
+                } => {
+                    // CSR operations are executed in-order during the Commit stage
+                    drop(rs_lock);
+
+                    let rob_entry = RobEntry::<rob::Ready>::csr(pc, ctrl, csr, src, dest);
+                    rob_entry_lock.issue_ready(rob_entry);
+                    self.serializing.write(true);
+                    break;
+                }
             };
             let rs_entry = RsEntry {
                 dest: rob_index,
@@ -269,6 +285,13 @@ impl<I, O, E> Cpu<I, O, E> {
     /// Returns then new PC if there was a branch misprediction.
     #[must_use]
     pub(super) fn commit(&mut self) -> Option<Address> {
+        let mut instret = self.csr_file.implicit_read(CsrAddr::MINSTRET);
+        let jump = self.retire(&mut instret);
+        self.csr_file.implicit_write(CsrAddr::MINSTRET, instret);
+        jump
+    }
+
+    fn retire(&mut self, instret: &mut u64) -> Option<Address> {
         let mut rob_lock = self.rob.lock();
         let mut reg_lock = self.regs.commit_lock();
         let mut zbp_lock = self.zb_predictor.update_lock();
@@ -277,7 +300,10 @@ impl<I, O, E> Cpu<I, O, E> {
 
         for priority in 0..self.commit_width.get() {
             let entry = rob_lock.pop_if_ready()?;
-            self.stats.executed_instrs += 1;
+            *instret = instret.wrapping_add(match entry.data() {
+                Ok(_) | Err(EnvTrap::Exception(_)) => 1,
+                Err(EnvTrap::Ecall) | Err(EnvTrap::Ebreak) => 0,
+            });
 
             let pc = entry.addr();
             let data = match *entry.data() {
@@ -338,6 +364,31 @@ impl<I, O, E> Cpu<I, O, E> {
                     store(mem, addr, value);
                 }
                 ReadyRobEntry::Fence => {}
+                ReadyRobEntry::Csr {
+                    ctrl,
+                    csr,
+                    src,
+                    dest,
+                } => {
+                    //TODO Make this register read not rely on being commited in the correct order (use priority instead)
+                    let data = match src {
+                        CsrSrc::Reg(name) => unsafe { reg_lock.get(name) },
+                        CsrSrc::Imm(imm) => RegData::unsigned(imm as _),
+                    };
+                    match self.csr_file.access(csr, ctrl, src, data, dest) {
+                        CsrAccessResult::NotRead {} => {}
+                        CsrAccessResult::Read { data } => {
+                            reg_lock.set(dest, data, priority);
+                        }
+                        CsrAccessResult::Exception(err) => {
+                            let trap = EnvTrap::Exception(err.into());
+                            self.cycle_result.traps.push(trap);
+                        }
+                    }
+                    debug_assert!(self.serializing.read(), "pipeline not serialized");
+                    self.serializing.write(false);
+                    return None;
+                }
             }
         }
 

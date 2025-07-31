@@ -1,23 +1,19 @@
+pub use self::decode::encoding::CsrImmediate;
 use self::mem_access::{MemRead, MemWrite};
+use crate::components::cpu::csr::CsrAddr;
 use crate::components::cpu::error::Exception;
 use crate::components::cpu::reg::{RegData, RegName};
 use crate::components::cpu::{AluControl, MulControl};
+use crate::export_mod as instr_mod;
 
 use std::fmt;
-
-macro_rules! instr_mod {
-    ($name:ident) => {
-        mod $name;
-        pub use self::$name::*;
-    };
-}
-use instr_mod;
 
 instr_mod!(ctrl_trans);
 instr_mod!(env_call);
 instr_mod!(int_comput);
 instr_mod!(ld_str);
 instr_mod!(mem_ord);
+instr_mod!(zicsr_ext);
 instr_mod!(m_ext);
 
 pub mod decode;
@@ -72,6 +68,12 @@ pub enum Instruction {
     EnvTrap(EnvTrap),
     //TODO Improve fence granularity
     Fence,
+    Csr {
+        ctrl: CsrControl,
+        csr: CsrAddr,
+        src: CsrSrc,
+        dest: RegName,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,9 +113,34 @@ impl Branch {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EnvTrap {
-    Syscall,
-    Break,
+    Ecall,
+    Ebreak,
     Exception(Exception),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CsrSrc {
+    Reg(RegName),
+    Imm(CsrImmediate),
+}
+
+impl fmt::Display for CsrSrc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CsrSrc::Reg(reg) => fmt::Display::fmt(reg, f),
+            CsrSrc::Imm(imm) => fmt::Display::fmt(imm, f),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CsrControl {
+    /// Atomic Read/Write
+    Rw,
+    /// Atomic Read and Set Bits
+    Rs,
+    /// Atomic Read and Clear Bits
+    Rc,
 }
 
 pub(crate) mod display {

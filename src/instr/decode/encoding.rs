@@ -1,4 +1,6 @@
 pub use self::b_type::BTypeFormat;
+pub use self::csr_type::CsrTypeFormat;
+pub use self::csri_type::{CsrImmediate, CsriTypeFormat};
 pub use self::i_type::ITypeFormat;
 pub use self::j_type::JTypeFormat;
 pub use self::r_type::RTypeFormat;
@@ -9,6 +11,8 @@ use crate::instr::decode::Decode;
 use std::fmt;
 
 mod b_type;
+mod csr_type;
+mod csri_type;
 mod i_type;
 mod j_type;
 mod r_type;

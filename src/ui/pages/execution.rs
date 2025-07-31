@@ -1,4 +1,5 @@
 use self::console::Console;
+use self::csrs::CsrDashboard;
 use self::dashboard::CpuDashboard;
 use self::tabs::ExecutionTabs;
 use super::Page;
@@ -16,6 +17,7 @@ use ratatui::widgets::{Block, Borders, Cell, Row, Table, Tabs};
 use std::num::NonZeroUsize;
 
 mod console;
+mod csrs;
 mod dashboard;
 mod tabs;
 
@@ -30,18 +32,20 @@ enum Focused {
 enum Tab {
     #[none]
     Dashboard,
+    CSRs,
     Console,
 }
 
 impl Tab {
-    pub fn titles() -> [&'static str; 2] {
-        ["Dashboard", "Console"]
+    pub fn titles() -> [&'static str; 3] {
+        ["Dashboard", "CSRs", "Console"]
     }
 
     pub fn index(&self) -> usize {
         match self {
             Tab::Dashboard => 0,
-            Tab::Console => 1,
+            Tab::CSRs => 1,
+            Tab::Console => 2,
         }
     }
 }
@@ -53,6 +57,7 @@ pub struct ExecutionPage<'c> {
     model: CpuModel,
     tabs: ExecutionTabs,
     dashboard: CpuDashboard,
+    csrs: CsrDashboard,
     console: Console,
     focused: Focused,
     tab: Tab,
@@ -70,6 +75,7 @@ impl<'c> ExecutionPage<'c> {
             model,
             tabs: ExecutionTabs::new(tab),
             dashboard: CpuDashboard::new(scheduler_count),
+            csrs: Default::default(),
             console: Default::default(),
             focused: Default::default(),
             tab,
@@ -77,6 +83,7 @@ impl<'c> ExecutionPage<'c> {
         match page.focused {
             Focused::Content => match page.tab {
                 Tab::Dashboard => Focusable::focus_next(&mut page.dashboard),
+                Tab::CSRs => Focusable::focus_next(&mut page.csrs),
                 Tab::Console => Focusable::focus_next(&mut page.console),
             },
             Focused::Tabs => Focusable::focus_next(&mut page.tabs),
@@ -89,6 +96,7 @@ impl<'c> ExecutionPage<'c> {
         match self.focused {
             Focused::Content => match self.tab {
                 Tab::Dashboard => tips.extend(self.dashboard.help()),
+                Tab::CSRs => tips.extend(self.csrs.help()),
                 Tab::Console => tips.extend(self.console.help()),
             },
             Focused::Tabs => tips.extend(self.tabs.help()),
@@ -148,6 +156,7 @@ impl Widget for &mut ExecutionPage<'_> {
 
         match self.tab {
             Tab::Dashboard => self.dashboard.render(&self.model, content, buf),
+            Tab::CSRs => self.csrs.render(self.model.csr_file(), content, buf),
             Tab::Console => self.console.render(self.cpu.os(), content, buf),
         }
 
@@ -168,6 +177,7 @@ impl EventHandler<()> for ExecutionPage<'_> {
                     };
                     self.dashboard.handle_event(event, payload)
                 }
+                Tab::CSRs => self.csrs.handle_event(event, ()).map(|_| None),
                 Tab::Console => self
                     .console
                     .handle_event(event, self.cpu.os())
@@ -191,6 +201,7 @@ impl FocusHandler for ExecutionPage<'_> {
         Some(match self.focused {
             Focused::Content => match self.tab {
                 Tab::Dashboard => &mut self.dashboard,
+                Tab::CSRs => &mut self.csrs,
                 Tab::Console => &mut self.console,
             },
             Focused::Tabs => &mut self.tabs,

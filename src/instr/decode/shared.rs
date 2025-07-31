@@ -1,3 +1,4 @@
+use crate::components::cpu::csr::CsrAddr;
 use crate::components::cpu::reg::RegName;
 use crate::instr::raw::{Bits, RawInstr, RawInstrBits};
 
@@ -86,4 +87,10 @@ pub(crate) fn decode_funct7(instr: RawInstr) -> Funct7 {
 
 pub(crate) fn decode_funct6(instr: RawInstr) -> Funct6 {
     Funct6(instr.extract_bits::<{ Funct6::LEN }, { Funct6::MSB }>())
+}
+
+pub(crate) fn decode_csr(instr: RawInstr) -> CsrAddr {
+    instr
+        .extract_bits::<{ CsrAddr::LEN }, { CsrAddr::MSB }>()
+        .into()
 }

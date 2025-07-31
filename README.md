@@ -29,7 +29,7 @@ exit # Exit the docker container
 
 Lastly, to compile the simulator and run a RISC-V program:
 ```shell
-cargo run --features="build-binary" --release -- "<path-to-riscv-binary>"
+cargo run --release -- "<path-to-riscv-binary>"
 ```
 
 [//]: # (<!--TODO Improve README)

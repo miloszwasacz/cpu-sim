@@ -81,7 +81,8 @@ impl ReorderBuffer {
                 } => future_file[*dest].write_result(result.tag, *value),
                 ReadyRobEntry::Branch { .. }
                 | ReadyRobEntry::Store { .. }
-                | ReadyRobEntry::Fence => {}
+                | ReadyRobEntry::Fence
+                | ReadyRobEntry::Csr { .. } => {}
             });
             if new {
                 holder.write(RobEntryHolder::Ready(ready));

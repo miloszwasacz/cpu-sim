@@ -1,3 +1,4 @@
+pub use super::csr::diagnostics::*;
 pub use super::error::Exception;
 pub use super::exec_engine::diagnostics::*;
 pub use super::front_end::diagnostics::*;
@@ -26,22 +27,23 @@ pub struct CpuSnapshot {
     pub schedulers: Box<[SchedulerSnapshot]>,
     pub reg_file: RegFileSnapshot,
     pub future_file: FutureFileSnapshot,
+    pub csr_file: CsrFileSnapshot,
     pub load_queue: LoadQueueSnapshot,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CpuStats {
-    pub clock_cycle: usize,
-    pub executed_instrs: usize,
+    pub cycle: u64,
+    pub retired: u64,
 }
 
 impl CpuStats {
     pub fn ipc(&self) -> f32 {
-        if self.clock_cycle == 0 {
+        if self.cycle == 0 {
             return 0.0;
         }
 
-        self.executed_instrs as f32 / self.clock_cycle as f32
+        self.retired as f32 / self.cycle as f32
     }
 }
 
@@ -49,8 +51,13 @@ impl<I, O, E> Diagnostics for Cpu<I, O, E> {
     type Output = CpuSnapshot;
 
     fn diagnostics(&self) -> Self::Output {
+        let stats = CpuStats {
+            cycle: self.csr_file.implicit_read(CsrAddr::MCYCLE),
+            retired: self.csr_file.implicit_read(CsrAddr::MINSTRET),
+        };
+
         Self::Output {
-            stats: self.stats,
+            stats,
             pc: *self.pc.read(),
             zb_predictor: self.zb_predictor.diagnostics(),
             zbp_regs: self.zbp_regs.read().clone(),
@@ -63,6 +70,7 @@ impl<I, O, E> Diagnostics for Cpu<I, O, E> {
             schedulers: self.schedulers.diagnostics(),
             reg_file: self.regs.diagnostics(),
             future_file: self.regs.future_file().diagnostics(),
+            csr_file: self.csr_file.diagnostics(),
             load_queue: self.load_queue.diagnostics(&self.rob),
         }
     }

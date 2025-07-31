@@ -1,3 +1,4 @@
+use crate::components::cpu::csr::CsrAddr;
 use crate::components::memory::Address;
 use crate::instr::raw::{RawInstr, RawInstrBits};
 use crate::instr::EnvTrap;
@@ -13,6 +14,7 @@ const ADDR_DISPLAY_WIDTH: usize = RawInstrBits::BITS as usize / 16;
 pub enum Exception {
     FetchError(FetchError),
     DecodeError(DecodeError),
+    CsrError(CsrError),
 }
 
 impl fmt::Display for Exception {
@@ -20,6 +22,7 @@ impl fmt::Display for Exception {
         match self {
             Self::FetchError(err) => fmt::Display::fmt(err, f),
             Self::DecodeError(err) => fmt::Display::fmt(err, f),
+            Self::CsrError(err) => fmt::Display::fmt(err, f),
         }
     }
 }
@@ -90,6 +93,37 @@ impl Error for DecodeError {}
 impl From<DecodeError> for Exception {
     fn from(value: DecodeError) -> Self {
         Self::DecodeError(value)
+    }
+}
+
+//#endregion
+
+//#region CsrError
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CsrError {
+    InvalidCsr(CsrAddr),
+    WriteError(CsrAddr),
+}
+
+impl fmt::Display for CsrError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidCsr(addr) => {
+                write!(f, "CSR {} is not implemented", addr)
+            }
+            Self::WriteError(addr) => {
+                write!(f, "could not write to the {} CSR", addr)
+            }
+        }
+    }
+}
+
+impl Error for CsrError {}
+
+impl From<CsrError> for Exception {
+    fn from(value: CsrError) -> Self {
+        Self::CsrError(value)
     }
 }
 

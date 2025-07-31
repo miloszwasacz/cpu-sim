@@ -7,12 +7,12 @@ use cpu_sim::components::diagnostics::cpu::{
     RobEntrySnapshot, RobIndex, RobNotReady as NotReady, RobReady as Ready,
 };
 use cpu_sim::components::diagnostics::fmt_addr;
-use cpu_sim::instr::{Ebreak, Ecall, EnvTrap};
+use cpu_sim::instr::{CsrControl, CsrSrc, Ebreak, Ecall, EnvTrap};
 use ratatui::prelude::*;
 
 const MISPREDICTED_COLOR: Color = Color::LightMagenta;
-const SYSCALL_COLOR: Color = Color::LightBlue;
-const BREAK_COLOR: Color = Color::Cyan;
+const ECALL_COLOR: Color = Color::LightBlue;
+const EBREAK_COLOR: Color = Color::Cyan;
 
 pub type Rob = Scrolling<RobModel>;
 
@@ -100,13 +100,30 @@ impl StatefulComponent for Rob {
                                     (format!("STORE  {:#}, {}", src, fmt_addr(addr)), READY_COLOR)
                                 }
                                 Ready::Fence => ("FENCE".to_string(), READY_COLOR),
+                                Ready::Csr {
+                                    ctrl,
+                                    csr,
+                                    src,
+                                    dest,
+                                } => {
+                                    let instr = match ctrl {
+                                        CsrControl::Rw => "CSRRW",
+                                        CsrControl::Rs => "CSRRS",
+                                        CsrControl::Rc => "CSRRC",
+                                    };
+                                    let src = match src {
+                                        CsrSrc::Reg(name) => format!("{name:#}"),
+                                        CsrSrc::Imm(imm) => format!("{imm}"),
+                                    };
+                                    (format!("{instr}  {dest:#}, {src}, {csr:#}"), READY_COLOR)
+                                }
                             },
                             Err(trap) => match trap {
-                                EnvTrap::Syscall => {
-                                    (Ecall::DISPLAY_NAME.to_ascii_uppercase(), SYSCALL_COLOR)
+                                EnvTrap::Ecall => {
+                                    (Ecall::DISPLAY_NAME.to_ascii_uppercase(), ECALL_COLOR)
                                 }
-                                EnvTrap::Break => {
-                                    (Ebreak::DISPLAY_NAME.to_ascii_uppercase(), BREAK_COLOR)
+                                EnvTrap::Ebreak => {
+                                    (Ebreak::DISPLAY_NAME.to_ascii_uppercase(), EBREAK_COLOR)
                                 }
                                 EnvTrap::Exception(_) => ("Exception".to_string(), EXCEPTION_COLOR),
                             },

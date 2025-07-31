@@ -1,3 +1,5 @@
+use super::instr_mod;
+
 instr_mod!(jal);
 instr_mod!(jalr);
 
@@ -11,13 +13,7 @@ instr_mod!(bne);
 macro_rules! cond_branch {
     ($name:ident, $branch:ident) => {
         #[derive(
-            Debug,
-            cpu_sim_derive::Display,
-            Clone,
-            Copy,
-            PartialEq,
-            Eq,
-            cpu_sim_derive::Decode,
+            Debug, cpu_sim_derive::Display, Clone, Copy, PartialEq, Eq, cpu_sim_derive::Decode,
         )]
         pub struct $name(crate::instr::decode::encoding::BTypeFormat);
 

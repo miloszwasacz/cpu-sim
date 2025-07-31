@@ -1,9 +1,9 @@
+use super::{instr_mod, Instruction};
 use crate::components::cpu::reg::{DataType, RegData};
 use crate::components::memory::{Address, MemoryReadAccess, MemoryWriteAccess, L1D};
 use crate::instr::decode::encoding::{ITypeFormat, STypeFormat};
 use crate::instr::decode::Decode;
 use crate::instr::raw::RawInstr;
-use crate::instr::Instruction;
 
 use std::fmt;
 use std::marker::PhantomData;

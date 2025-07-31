@@ -1,4 +1,4 @@
-use self::diagnostics::CpuStats;
+use self::csr::{CsrAddr, CsrFile};
 pub use self::exec_engine::exec_unit::alu::AluControl;
 pub use self::exec_engine::exec_unit::mul::MulControl;
 use self::exec_engine::{
@@ -22,6 +22,7 @@ use std::mem;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 
+pub(crate) mod csr;
 pub(super) mod diagnostics;
 pub mod error;
 mod exec_engine;
@@ -85,6 +86,7 @@ pub struct Cpu<I, O, E> {
     rob: ReorderBuffer,
     schedulers: Schedulers,
     regs: RegFile,
+    csr_file: CsrFile,
     exec_units: Box<[ExecUnit]>,
     cdb: CommonDataBus,
 
@@ -93,7 +95,6 @@ pub struct Cpu<I, O, E> {
     mem_hierarchy: MemHierarchy,
 
     // Misc
-    stats: CpuStats,
     cycle_result: CycleResult,
     os: Os<I, O, E>,
     exit: bool,
@@ -128,13 +129,13 @@ impl<I: Read, O: Write, E: Write> Cpu<I, O, E> {
             rob: ReorderBuffer::with_capacity(ROB_CAPACITY),
             schedulers,
             regs: Default::default(),
+            csr_file: Default::default(),
             exec_units,
             cdb: CommonDataBus::new(),
 
             load_queue: LoadQueue::with_capacity(LOAD_QUEUE_CAPACITY),
             mem_hierarchy,
 
-            stats: Default::default(),
             cycle_result: Default::default(),
             os,
             exit: false,
@@ -151,8 +152,8 @@ impl<I: Read, O: Write, E: Write> Cpu<I, O, E> {
             let mut brk = false;
             for trap in traps {
                 match trap {
-                    EnvTrap::Syscall => self.handle_syscall(),
-                    EnvTrap::Break => brk = true,
+                    EnvTrap::Ecall => self.handle_syscall(),
+                    EnvTrap::Ebreak => brk = true,
                     EnvTrap::Exception(ex) => {
                         //TODO Exception handling
                         errors.push(ex.into())
@@ -180,8 +181,8 @@ impl<I: Read, O: Write, E: Write> Cpu<I, O, E> {
         } = self.clock_cycle();
         for trap in traps {
             match trap {
-                EnvTrap::Syscall => self.handle_syscall(),
-                EnvTrap::Break => {}
+                EnvTrap::Ecall => self.handle_syscall(),
+                EnvTrap::Ebreak => {}
                 EnvTrap::Exception(ex) => {
                     //TODO Exception handling
                     errors.push(ex.into())
@@ -272,10 +273,13 @@ impl<I, O, E> Cpu<I, O, E> {
     pub(crate) unsafe fn init(&mut self, entrypoint: Address, sp: Address) {
         self.pc.write(entrypoint);
         self.regs.set(RegName::SP, RegData::address(sp));
+        self.csr_file.implicit_write(CsrAddr::MCYCLE, 0);
+        self.csr_file.implicit_write(CsrAddr::MINSTRET, 0);
 
         self.pc.finish_cycle();
         self.regs.future_file_mut().clear();
         self.regs.finish_cycle();
+        self.csr_file.finish_cycle();
     }
 
     pub fn reset(&mut self) {
@@ -284,7 +288,8 @@ impl<I, O, E> Cpu<I, O, E> {
     }
 
     fn clock_cycle(&mut self) -> CycleResult {
-        self.stats.clock_cycle += 1;
+        let cycle = self.csr_file.implicit_read(CsrAddr::MCYCLE).wrapping_add(1);
+        self.csr_file.implicit_write(CsrAddr::MCYCLE, cycle);
 
         let new_pc = self.zb_predict();
         let fetch_stall = self.fetch();
@@ -362,6 +367,7 @@ impl<I, O, E> Sequential for Cpu<I, O, E> {
             exec_unit.finish_cycle();
         }
         self.regs.finish_cycle();
+        self.csr_file.finish_cycle();
         self.cdb.finish_cycle();
         self.load_queue.finish_cycle();
     }

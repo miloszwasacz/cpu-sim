@@ -7,3 +7,5 @@ edition = "2024"
 const_format = { workspace = true }
 convert_case = { workspace = true }
 itertools = { workspace = true }
+phf = { workspace = true }
+phf_codegen = { workspace = true }

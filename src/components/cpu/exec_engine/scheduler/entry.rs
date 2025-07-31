@@ -290,7 +290,8 @@ impl RegValue {
                     ReadyRobEntry::Jump { .. }
                     | ReadyRobEntry::Branch { .. }
                     | ReadyRobEntry::Store { .. }
-                    | ReadyRobEntry::Fence => {}
+                    | ReadyRobEntry::Fence
+                    | ReadyRobEntry::Csr { .. } => {}
                 }
             }
         }

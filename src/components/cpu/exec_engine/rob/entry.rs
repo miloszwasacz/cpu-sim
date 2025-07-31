@@ -1,9 +1,10 @@
+use crate::components::cpu::csr::CsrAddr;
 use crate::components::cpu::exec_engine::exec_unit::{ExecResult, ExecResultData};
 use crate::components::cpu::reg::{RegData, RegName};
 use crate::components::cpu::Pc;
 use crate::components::memory::Address;
 use crate::instr::mem_access::MemWrite;
-use crate::instr::EnvTrap;
+use crate::instr::{CsrControl, CsrSrc, EnvTrap};
 
 pub type NotReady = NotReadyRobEntry;
 pub type Ready = Result<ReadyRobEntry, EnvTrap>;
@@ -153,6 +154,10 @@ impl RobEntry<Ready> {
         Self(Ok(ReadyRobEntry::Fence), pc)
     }
 
+    pub fn csr(pc: Pc, ctrl: CsrControl, csr: CsrAddr, src: CsrSrc, dest: RegName) -> Self {
+        Self(Ok(ReadyRobEntry::Csr { ctrl, csr, src, dest }), pc)
+    }
+
     pub fn data(&self) -> &Ready {
         &self.0
     }
@@ -273,6 +278,16 @@ pub enum ReadyRobEntry {
         addr: Address,
     },
     Fence,
+    Csr {
+        /// The type of operation to perform on the CSR
+        ctrl: CsrControl,
+        /// The read/written CSR
+        csr: CsrAddr,
+        /// The value or source CSR supplying the
+        src: CsrSrc,
+        /// The register where the result will be put.
+        dest: RegName,
+    },
 }
 
 //#endregion

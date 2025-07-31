@@ -1,3 +1,4 @@
+pub use self::csr_file::CsrFileModel;
 pub use self::decode_queue::{DecodeQueueModel, Decoded};
 pub use self::front_end::FrontEndModel;
 pub use self::future_file::FutureFileModel;
@@ -8,6 +9,7 @@ pub use self::schedulers::SchedulersModel;
 
 use cpu_sim::components::diagnostics::cpu::CpuSnapshot;
 
+mod csr_file;
 mod decode_queue;
 mod front_end;
 mod future_file;
@@ -24,6 +26,7 @@ pub struct CpuModel {
     schedulers: SchedulersModel,
     reg_file: RegFileModel,
     future_file: FutureFileModel,
+    csr_file: CsrFileModel,
     load_queue: LoadQueueModel,
 }
 
@@ -52,6 +55,10 @@ impl CpuModel {
         &self.future_file
     }
 
+    pub fn csr_file(&self) -> &CsrFileModel {
+        &self.csr_file
+    }
+
     pub fn load_queue(&self) -> &LoadQueueModel {
         &self.load_queue
     }
@@ -73,6 +80,7 @@ impl From<CpuSnapshot> for CpuModel {
             schedulers,
             reg_file,
             future_file,
+            csr_file,
             load_queue,
         } = snapshot;
 
@@ -91,6 +99,7 @@ impl From<CpuSnapshot> for CpuModel {
         let schedulers = SchedulersModel::new(schedulers);
         let reg_file = RegFileModel::new(reg_file);
         let future_file = FutureFileModel::new(future_file);
+        let csr_file = CsrFileModel::new(csr_file);
         let load_queue = LoadQueueModel::new(load_queue);
 
         Self {
@@ -100,6 +109,7 @@ impl From<CpuSnapshot> for CpuModel {
             schedulers,
             reg_file,
             future_file,
+            csr_file,
             load_queue,
         }
     }
