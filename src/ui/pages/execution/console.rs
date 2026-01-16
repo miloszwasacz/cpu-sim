@@ -39,7 +39,7 @@ impl Default for Console {
 }
 
 impl Console {
-    pub(super) fn help(&self) -> impl IntoIterator<Item = HelpItem> {
+    pub(super) fn help(&self) -> impl IntoIterator<Item = HelpItem<'_, '_>> {
         const SCROLL: (&str, &str) = ("↑↓", "Scroll");
         const HOME: (&str, &str) = ("Home", "Scroll to bottom");
         [SCROLL, HOME]

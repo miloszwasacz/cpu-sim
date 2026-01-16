@@ -17,7 +17,7 @@ impl ExecutionTabs {
         }
     }
 
-    pub(super) fn help(&self) -> impl IntoIterator<Item = HelpItem> {
+    pub(super) fn help(&self) -> impl IntoIterator<Item = HelpItem<'_, '_>> {
         const SWITCH_TAB: (&str, &str) = ("←→", "Switch Tab");
         [SWITCH_TAB]
     }

@@ -21,7 +21,7 @@ mod lock;
 
 //#region ROB
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 enum RobEntryHolder {
     #[default]
     Empty,
@@ -52,7 +52,7 @@ impl ReorderBuffer {
         self.buffer.len()
     }
 
-    pub(super) fn lock(&mut self) -> RobLock {
+    pub(super) fn lock(&mut self) -> RobLock<'_> {
         RobLock::new(self)
     }
 

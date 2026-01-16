@@ -91,7 +91,7 @@ impl<'c> ExecutionPage<'c> {
         page
     }
 
-    fn help(&self) -> Table {
+    fn help(&self) -> Table<'_> {
         let mut tips = vec![("Tab", "Focus next"), ("Shift+Tab", "Focus previous")];
         match self.focused {
             Focused::Content => match self.tab {

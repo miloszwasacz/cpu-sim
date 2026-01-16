@@ -18,7 +18,7 @@ pub struct CsrDashboard {
 impl CsrDashboard {
     const ITEM_HEIGHT: u16 = 1;
 
-    pub(super) fn help(&self) -> impl IntoIterator<Item = HelpItem> {
+    pub(super) fn help(&self) -> impl IntoIterator<Item = HelpItem<'_, '_>> {
         const SCROLL_V: (&str, &str) = ("↑↓", "Scroll");
         const JUMP: (&str, &str) = ("Home/End", "Scroll to start/end");
         [SCROLL_V, JUMP]

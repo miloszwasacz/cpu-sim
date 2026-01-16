@@ -140,7 +140,7 @@ impl<I, O, E> Cpu<I, O, E> {
                     pc_plus_4,
                     predicted,
                 } = regs;
-                let decoded = decoder.decode(instr);
+                let decoded = instr.and_then(|instr| decoder.decode(instr));
                 match decoded {
                     Ok(instr) => {
                         let (decoded, new_prediction) =

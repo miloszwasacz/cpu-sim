@@ -20,7 +20,7 @@ impl RegFile {
         Default::default()
     }
 
-    pub(in crate::components::cpu) fn commit_lock(&mut self) -> RegFileCommitLock {
+    pub(in crate::components::cpu) fn commit_lock(&mut self) -> RegFileCommitLock<'_> {
         RegFileCommitLock {
             file: self,
             commited: [None; ARCH_REG_COUNT],
@@ -131,7 +131,7 @@ impl Drop for RegFileCommitLock<'_> {
 pub struct FutureFile([RegStat; ARCH_REG_COUNT]);
 
 impl FutureFile {
-    pub(in crate::components::cpu) fn issue_lock(&mut self) -> FutureFileIssueLock {
+    pub(in crate::components::cpu) fn issue_lock(&mut self) -> FutureFileIssueLock<'_> {
         FutureFileIssueLock {
             file: self,
             issued: [None; ARCH_REG_COUNT],

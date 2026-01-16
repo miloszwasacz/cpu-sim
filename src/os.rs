@@ -8,6 +8,7 @@ use std::ops::Range;
 mod errno;
 pub mod loader;
 
+/// Checks if `fd` is non-negative, or returns [`errno::EBADF`].
 macro_rules! assert_fd_valid {
     ($fd:expr) => {
         if $fd < 0 {
@@ -17,9 +18,15 @@ macro_rules! assert_fd_valid {
 }
 
 pub type Result = std::result::Result<OsFnResult, (OsFnResult, Errno)>;
+
+/// Exit code returned by emulated system calls.
 pub type OsFnResult = i32;
+
+/// File descriptor
 pub type Fd = i32;
 
+/// Emulated Operating System, used for initial setup of the simulation
+/// and when performing an [environment call](crate::instr::Ecall).
 pub struct Os<I, O, E> {
     errno_addr: Option<Address>,
     _end_addr: Address,
@@ -31,6 +38,7 @@ pub struct Os<I, O, E> {
 }
 
 impl<I: Read, O: Write, E: Write> Os<I, O, E> {
+    /// Creates a new OS emulation with the provided standard streams.
     pub fn new(stdin: I, stdout: O, stderr: E) -> Self {
         Self {
             errno_addr: None,
@@ -45,37 +53,45 @@ impl<I: Read, O: Write, E: Write> Os<I, O, E> {
 }
 
 impl<I, O, E> Os<I, O, E> {
+    /// Standard input stream.
     pub fn stdin(&self) -> &I {
         &self.stdin
     }
 
+    /// Mutable access to the standard input stream.
     pub fn stdin_mut(&mut self) -> &mut I {
         &mut self.stdin
     }
 
+    /// Standard output stream.
     pub fn stdout(&self) -> &O {
         &self.stdout
     }
 
+    /// Standard error stream.
     pub fn stderr(&self) -> &E {
         &self.stderr
     }
 
+    /// Saves the address of the global `errno` variable.
     fn set_errno_addr(&mut self, addr: Option<Address>) {
         self.errno_addr = addr;
     }
 
+    /// Sets the `_end_addr` variable, used by the [`sbrk`](Self::sbrk) system call.
     #[allow(non_snake_case)]
     fn set__end_addr(&mut self, addr: Address) {
         self._end_addr = addr;
     }
 
+    /// Sets the global `errno` variable if its location has been previously defined.
     pub fn set_errno(&mut self, mut mem: impl MemoryWriteAccess, errno: Errno) {
         if let Some(addr) = self.errno_addr {
             mem.write(addr, errno);
         }
     }
 
+    /// The `close` Linux system call.
     pub fn close(&mut self, file: Fd) -> Result {
         assert_fd_valid!(file);
         if matches!(file, 0..=2) {
@@ -101,6 +117,7 @@ impl<I, O, E> Os<I, O, E> {
             })
     }
 
+    /// The `fstat` Linux system call.
     pub fn fstat<M>(&mut self, mut mem: M, file: Fd, statbuf: Address) -> Result
     where
         M: MemoryReadAccess + MemoryWriteAccess,
@@ -128,6 +145,7 @@ impl<I, O, E> Os<I, O, E> {
         }
     }
 
+    /// The `lseek` Linux system call.
     pub fn lseek(&mut self, file: Fd, offset: i32, whence: i32) -> Result {
         const SEEK_SET: i32 = 0;
         const SEEK_CUR: i32 = 1;
@@ -162,6 +180,7 @@ impl<I, O, E> Os<I, O, E> {
 }
 
 impl<I: Read, O, E> Os<I, O, E> {
+    /// The `read` Linux system call.
     pub fn read<M>(&mut self, mut mem: M, file: Fd, buf: Address, count: u32) -> Result
     where
         M: MemoryReadAccess + MemoryWriteAccess,
@@ -198,6 +217,7 @@ impl<I: Read, O, E> Os<I, O, E> {
         })
     }
 
+    /// The `sbrk` Linux system call.
     pub fn sbrk(&mut self, stack_ptr: Address, incr: i32) -> Result {
         if self.heap_end == 0 {
             self.heap_end = self._end_addr;
@@ -219,6 +239,7 @@ impl<I: Read, O, E> Os<I, O, E> {
 }
 
 impl<I, O: Write, E: Write> Os<I, O, E> {
+    /// The `write` Linux system call.
     pub fn write<M>(&mut self, mut mem: M, file: Fd, buf: Address, count: u32) -> Result
     where
         M: MemoryReadAccess,
@@ -258,6 +279,7 @@ impl<I, O: Write, E: Write> Os<I, O, E> {
     }
 }
 
+/// Reads bytes from `mem` at the specified `addr_range`
 fn read_bytes<M: MemoryReadAccess>(mut mem: M, addr_range: Range<Address>) -> Vec<u8> {
     let mut bytes = Vec::<u8>::with_capacity((addr_range.end - addr_range.start) as usize);
     for addr in addr_range {
@@ -266,6 +288,7 @@ fn read_bytes<M: MemoryReadAccess>(mut mem: M, addr_range: Range<Address>) -> Ve
     bytes
 }
 
+/// Writes `data` to `mem` at the specified `addr_range`
 fn write_bytes<M: MemoryWriteAccess>(mut mem: M, addr_range: Range<Address>, data: &[u8]) {
     for (addr, byte) in addr_range.zip(data) {
         mem.write(addr, *byte);

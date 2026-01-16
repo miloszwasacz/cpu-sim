@@ -1,3 +1,5 @@
+//! Functionality for creating a simulated process from an ELF file.
+
 use crate::components::cpu::Cpu;
 use crate::components::memory::{Address, MemSize, Memory};
 
@@ -24,7 +26,7 @@ impl Loader {
     /// After finishing a program, the `cpu` should be [`reset`](Cpu::reset)
     /// before loading another program.
     ///
-    /// [^1]: By _undefined behavior_ we mean the simulation might exhibit undefined behavior.
+    /// [^1]: By _undefined behavior_ we mean the simulation might exhibit unexpected behavior.
     ///       This method is still _safe_ in the [Rust sense](https://doc.rust-lang.org/reference/unsafety.html).
     pub unsafe fn load<P: AsRef<Path>, I, O, E>(
         &self,
@@ -63,6 +65,8 @@ impl Loader {
         Ok(())
     }
 
+    /// Tries to find a symbol in the `elf` file and extract the address where
+    /// it should be placed in the process memory.
     fn get_symbol_addr(
         elf: &ElfBytes<LittleEndian>,
         symbol_name: &str,
@@ -86,13 +90,19 @@ impl Loader {
     }
 }
 
+/// Possible errors when loading a program.
 #[derive(Debug)]
 pub enum LoaderError {
+    /// The loader could not open the file.
     Io(io::Error),
+    /// The loader could not parse the ELF file.
     ParseError(&'static str, elf::ParseError),
+    /// The Program Header Table was not present in the ELF file.
     MissingProgramHeaderTable,
+    /// The `_end` symbol was not present in the ELF file.
     #[allow(non_camel_case_types)]
     Missing_End,
+    /// `.symtab` or `.strtab` were not present in the ELF file.
     MissingSymbolTable,
 }
 

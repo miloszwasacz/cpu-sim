@@ -1,3 +1,5 @@
+//! Utilities and type definitions for working with raw encoded instructions.
+
 pub use self::raw_type::RawInstrType;
 pub(crate) use super::decode::REG_LEN;
 
@@ -7,11 +9,13 @@ use std::ops::{BitAnd, BitOr, Not, Shl, Shr};
 
 mod raw_type;
 
+/// Raw encoded instruction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RawInstr {
     bits: RawInstrBits,
 }
 
+/// Bitwise representation of an encoded instruction.
 pub(crate) type RawInstrBits = u32;
 
 impl RawInstr {
@@ -41,6 +45,7 @@ impl fmt::Display for RawInstr {
     }
 }
 
+/// Utility for extracting particular bit fields of specific length.
 #[derive(Debug, Clone, Copy)]
 pub struct Bits<const N: u64> {
     value: u64,

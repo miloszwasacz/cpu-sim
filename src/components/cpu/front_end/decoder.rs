@@ -10,14 +10,10 @@ impl Decoder {
         Self(())
     }
 
-    pub fn decode(
-        &mut self,
-        instr: Result<RawInstr, Exception>,
-    ) -> Result<FullInstruction, Exception> {
-        instr.and_then(|instr| {
-            instr
-                .decode()
-                .map_err(|raw| DecodeError::InvalidInstruction(raw).into())
-        })
+    pub fn decode(&mut self, instr: RawInstr) -> Result<FullInstruction, Exception> {
+        instr
+            .decode()
+            .map_err(DecodeError::InvalidInstruction)
+            .map_err(Into::into)
     }
 }

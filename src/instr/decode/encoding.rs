@@ -1,3 +1,5 @@
+//! Encoding formats of RISC-V instructions.
+
 pub use self::b_type::BTypeFormat;
 pub use self::csr_type::CsrTypeFormat;
 pub use self::csri_type::{CsrImmediate, CsriTypeFormat};

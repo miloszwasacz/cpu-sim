@@ -38,7 +38,7 @@ impl ZeroBubblePredictor {
             .map(|(_, predicted)| *predicted)
     }
 
-    pub fn update_lock(&mut self) -> ZbpUpdateLock {
+    pub fn update_lock(&mut self) -> ZbpUpdateLock<'_> {
         ZbpUpdateLock::new(self)
     }
 }
@@ -80,7 +80,7 @@ impl BranchPredictor {
         }
     }
 
-    pub fn update_lock(&mut self) -> BpUpdateLock {
+    pub fn update_lock(&mut self) -> BpUpdateLock<'_> {
         BpUpdateLock::new(self)
     }
 }

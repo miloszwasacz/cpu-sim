@@ -72,7 +72,7 @@ impl CpuDashboard {
         }
     }
 
-    pub(super) fn help(&self) -> impl IntoIterator<Item = HelpItem> {
+    pub(super) fn help(&self) -> impl IntoIterator<Item = HelpItem<'_, '_>> {
         const SCROLL_V: (&str, &str) = ("↑↓", "Scroll");
         const SCROLL_H: (&str, &str) = ("←→", "Scroll");
         const JUMP: (&str, &str) = ("Home/End", "Scroll to start/end");

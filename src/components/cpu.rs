@@ -26,7 +26,7 @@ pub(crate) mod csr;
 pub(super) mod diagnostics;
 pub mod error;
 mod exec_engine;
-mod flip_flop;
+pub mod flip_flop;
 mod front_end;
 mod mem_subsystem;
 pub(crate) mod reg;

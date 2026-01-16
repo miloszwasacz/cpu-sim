@@ -143,7 +143,7 @@ impl<D: RsData> From<RsEntry<D>> for super::diagnostics::SchedulerEntry<D> {
 //#region RsEntryData
 
 #[allow(private_bounds)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 pub enum RsEntryData<V: RsEntrySrc> {
     Alu {
         /// The control signal specifying which ALU operation should be performed.
@@ -179,6 +179,86 @@ pub enum RsEntryData<V: RsEntrySrc> {
         base: V,
         offset: Immediate,
     },
+}
+
+impl<V: RsEntrySrc + PartialEq> PartialEq for RsEntryData<V> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                RsEntryData::Alu {
+                    ctrl: c1,
+                    src1: s11,
+                    src2: s21,
+                },
+                RsEntryData::Alu {
+                    ctrl: c2,
+                    src1: s12,
+                    src2: s22,
+                },
+            ) => c1 == c2 && s11 == s12 && s21 == s22,
+            (
+                RsEntryData::Mul {
+                    ctrl: c1,
+                    src1: s11,
+                    src2: s21,
+                },
+                RsEntryData::Mul {
+                    ctrl: c2,
+                    src1: s12,
+                    src2: s22,
+                },
+            ) => c1 == c2 && s11 == s12 && s21 == s22,
+            (
+                RsEntryData::Jump {
+                    base: b1,
+                    offset: o1,
+                    apply_mask: m1,
+                },
+                RsEntryData::Jump {
+                    base: b2,
+                    offset: o2,
+                    apply_mask: m2,
+                },
+            ) => b1 == b2 && o1 == o2 && m1 == m2,
+            (
+                RsEntryData::Branch {
+                    ctrl: c1,
+                    src1: s11,
+                    src2: s21,
+                },
+                RsEntryData::Branch {
+                    ctrl: c2,
+                    src1: s12,
+                    src2: s22,
+                },
+            ) => c1 == c2 && s11 == s12 && s21 == s22,
+            (
+                RsEntryData::Load1 {
+                    load: l1,
+                    byte_count: c1,
+                    base: b1,
+                    offset: o1,
+                },
+                RsEntryData::Load1 {
+                    load: l2,
+                    byte_count: c2,
+                    base: b2,
+                    offset: o2,
+                },
+            ) => std::ptr::fn_addr_eq(*l1, *l2) && c1 == c2 && b1 == b2 && o1 == o2,
+            (
+                RsEntryData::Store {
+                    base: b1,
+                    offset: o1,
+                },
+                RsEntryData::Store {
+                    base: b2,
+                    offset: o2,
+                },
+            ) => b1 == b2 && o1 == o2,
+            _ => false,
+        }
+    }
 }
 
 impl NotReady {

@@ -116,7 +116,7 @@ impl Schedulers {
         self.schedulers.len()
     }
 
-    pub(super) fn reserve(&mut self, op: OperationType) -> Option<RsLock> {
+    pub(super) fn reserve(&mut self, op: OperationType) -> Option<RsLock<'_>> {
         for i in 0..self.max_len {
             let rs = self
                 .schedulers
@@ -138,11 +138,11 @@ impl Schedulers {
         None
     }
 
-    pub(super) fn iter(&self) -> Iter<Scheduler> {
+    pub(super) fn iter(&self) -> Iter<'_, Scheduler> {
         self.schedulers.iter()
     }
 
-    pub(super) fn iter_mut(&mut self) -> IterMut<Scheduler> {
+    pub(super) fn iter_mut(&mut self) -> IterMut<'_, Scheduler> {
         self.schedulers.iter_mut()
     }
 

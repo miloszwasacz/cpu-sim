@@ -3,8 +3,10 @@
  *
  * https://sourceware.org/git/?p=newlib-cygwin.git;a=blob;f=newlib/libc/include/sys/errno.h;h=7199db0d2e352ce85bb3955ed5c7ab8c3d8d0b42;hb=59891375d74e8e08a89ffe2e0dcd8145e18c7eb5
  */
+//! Constants for error codes returned by system calls.
 #![allow(unused)]
 
+/// Error code.
 pub type Errno = i32;
 
 /// Not owner

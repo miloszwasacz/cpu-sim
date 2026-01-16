@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 mod ui;
 
 fn main() -> ExitCode {
+    // Read arguments
     let args = env::args().collect::<Vec<_>>();
     if args.len() != 2 {
         println!("Usage: cpu-sim <path-to-binary>");
@@ -19,6 +20,7 @@ fn main() -> ExitCode {
     }
     let file = &args[1];
 
+    // Set up simulation
     let mem = Arc::new(Mutex::new(Memory::new()));
     let stdin = StdStream::default();
     let stdout = StdStream::default();
@@ -30,6 +32,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
+    // Run simulation
     match App::new(&mut cpu).run() {
         Ok(exit_code) => {
             println!("Simulation finished (exit code: {})", exit_code);
@@ -51,26 +54,4 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
-
-    // loop {
-    //     match cpu.run() {
-    //         Ok(cpu_sim::components::cpu::CpuRun::Exit(exit_code)) => {
-    //             let stdout = cpu.os().stdout();
-    //             println!("{}", stdout.inner());
-    //
-    //             eprintln!("process exited with code: {}", exit_code);
-    //             return ExitCode::SUCCESS;
-    //         }
-    //         Ok(cpu_sim::components::cpu::CpuRun::Break) => {
-    //             eprintln!("process break");
-    //             continue;
-    //         }
-    //         Err(errs) => {
-    //             for err in errs {
-    //                 eprintln!("{}", err);
-    //             }
-    //             return ExitCode::FAILURE;
-    //         }
-    //     }
-    // }
 }

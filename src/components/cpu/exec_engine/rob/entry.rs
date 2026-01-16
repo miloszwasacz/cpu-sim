@@ -182,7 +182,7 @@ impl<D: RobEntryData> From<RobEntry<D>> for super::diagnostics::RobEntry<D> {
 //#region NotReady
 
 //TODO Improve docs
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 pub enum NotReadyRobEntry {
     Alu {
         /// The register where the result will be put.
@@ -228,7 +228,7 @@ pub enum NotReadyRobEntry {
 //#region Ready
 
 //TODO Improve docs
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 pub enum ReadyRobEntry {
     Alu {
         /// The register where the result will be put.
